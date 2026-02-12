@@ -1,7 +1,9 @@
 
-export enum Role {
-  VIGIA = 'Vigia',
-  MOTORISTA = 'Motorista Categoria D',
+// Removed static Role enum to allow dynamic inputs
+export interface ExamProfile {
+  banca: string;
+  cargo: string;
+  escolaridade: 'Fundamental' | 'Médio' | 'Superior';
 }
 
 export interface Question {
@@ -28,7 +30,7 @@ export interface QuizSession {
 }
 
 export interface UploadedFile {
-  id?: string; // Made optional for backward compatibility, but used for storage
+  id?: string;
   name: string;
   mimeType: string;
   data: string; // Base64
@@ -52,12 +54,13 @@ export interface StrategicAnalysis {
 export interface HistoryItem {
   id: number;
   date: number;
-  role: Role;
+  // profile replaces the old 'role' string. 
+  // We keep 'roleLabel' for display purposes or backward compat logic if needed
+  profile: ExamProfile; 
   score: number;
   totalQuestions: number;
   totalTimeSeconds: number;
   analysis: StrategicAnalysis;
-  // Added fields to allow full replay/review of history
   questions?: Question[];
   answers?: AnswerAttempt[];
 }

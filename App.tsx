@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppView, Question, AnswerAttempt, UploadedFile, Role, StrategicAnalysis, HistoryItem } from './types';
+import { AppView, Question, AnswerAttempt, UploadedFile, ExamProfile, StrategicAnalysis, HistoryItem } from './types';
 import UploadSection from './components/UploadSection';
 import QuizInterface from './components/QuizInterface';
 import ResultsView from './components/ResultsView';
@@ -9,12 +9,18 @@ import { GraduationCap, Moon, Sun } from 'lucide-react';
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.HOME);
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<Role>(Role.VIGIA);
+  
+  // profile state replaces role
+  const [profile, setProfile] = useState<ExamProfile>({
+    banca: '',
+    cargo: '',
+    escolaridade: 'Médio'
+  });
+
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<AnswerAttempt[]>([]);
   const [analysis, setAnalysis] = useState<StrategicAnalysis | null>(null);
   
-  // Initialize dark mode from system preference or default to false
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return true;
@@ -34,33 +40,28 @@ const App: React.FC = () => {
     setIsDarkMode(!isDarkMode);
   };
 
-  const handleStartQuiz = async (selectedRole: Role, files: UploadedFile[], context: string) => {
+  const handleStartQuiz = async (selectedProfile: ExamProfile, files: UploadedFile[], context: string) => {
     setLoading(true);
-    setRole(selectedRole);
+    setProfile(selectedProfile);
     try {
-      const generatedQuestions = await generateQuestions(selectedRole, files, context);
+      const generatedQuestions = await generateQuestions(selectedProfile, files, context);
       if (generatedQuestions.length > 0) {
         setQuestions(generatedQuestions);
-        setAnswers([]); // Clear previous answers
+        setAnswers([]); 
         setAnalysis(null);
         setView(AppView.QUIZ);
       } else {
-        const isAuto = files.length === 0;
-        const msg = isAuto 
-          ? "A IA não conseguiu gerar questões automaticamente. Verifique se sua chave de API está válida e permite a ferramenta 'Google Search' (disponível no plano pago ou tier adequado), ou tente novamente."
-          : "Não foi possível gerar questões. Tente adicionar mais contexto ou verificar seus arquivos.";
-        alert(msg);
+        alert("A IA não conseguiu gerar questões para este perfil. Tente reformular a Banca ou Cargo.");
       }
     } catch (error) {
       console.error(error);
-      alert("Erro crítico ao conectar com a IA. Verifique o console para mais detalhes (F12).");
+      alert("Erro ao conectar com a IA.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleStartReview = (errorQuestions: Question[]) => {
-    // Shuffle the questions for better review
     const shuffled = [...errorQuestions].sort(() => Math.random() - 0.5);
     setQuestions(shuffled);
     setAnswers([]);
@@ -69,16 +70,16 @@ const App: React.FC = () => {
   };
 
   const handleViewHistory = (item: HistoryItem) => {
-    // Rehydrate state from history item
     if (item.questions && item.answers) {
       setQuestions(item.questions);
       setAnswers(item.answers);
       setAnalysis(item.analysis);
-      setRole(item.role);
+      if (item.profile) {
+        setProfile(item.profile);
+      }
       setView(AppView.RESULTS);
     } else {
-      // Legacy handling if old items don't have full data (shouldn't happen for new ones)
-      alert("Este item do histórico é antigo e não contém os detalhes completos das questões, apenas o resumo.");
+      alert("Item de histórico inválido ou antigo.");
     }
   };
 
@@ -86,8 +87,7 @@ const App: React.FC = () => {
     setAnswers(completedAnswers);
     setView(AppView.RESULTS);
     
-    // Trigger async analysis without blocking the UI transition
-    analyzePerformanceAndPattern(role, completedAnswers, questions).then(result => {
+    analyzePerformanceAndPattern(profile, completedAnswers, questions).then(result => {
       setAnalysis(result);
     });
   };
@@ -105,15 +105,14 @@ const App: React.FC = () => {
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2 rounded-lg">
+          <div className="flex items-center space-x-2 cursor-pointer" onClick={handleRestart}>
+            <div className="bg-gradient-to-tr from-indigo-600 to-purple-600 p-2 rounded-lg">
               <GraduationCap className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700 dark:from-blue-400 dark:to-indigo-400">
+              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 to-purple-700 dark:from-indigo-400 dark:to-purple-400">
                 CogniQuest.IA
               </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium tracking-wide">Vigia & Motorista</p>
             </div>
           </div>
           
@@ -121,7 +120,6 @@ const App: React.FC = () => {
             <button
               onClick={toggleTheme}
               className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
-              aria-label="Toggle Dark Mode"
             >
               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
@@ -129,7 +127,7 @@ const App: React.FC = () => {
             {view !== AppView.HOME && (
               <button 
                 onClick={handleRestart}
-                className="text-sm font-medium text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
+                className="text-sm font-medium text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 transition-colors"
               >
                 Voltar ao Início
               </button>
@@ -161,7 +159,7 @@ const App: React.FC = () => {
             answers={answers} 
             questions={questions} 
             analysis={analysis} 
-            role={role}
+            profile={profile}
             onRestart={handleRestart}
           />
         )}
@@ -170,7 +168,7 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-6 mt-auto transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 text-center text-gray-400 dark:text-gray-500 text-sm">
-          <p>© {new Date().getFullYear()} CogniQuest.IA. Sistema Inteligente de Estudos.</p>
+          <p>© {new Date().getFullYear()} CogniQuest.IA. Sistema Inteligente Multi-Banca.</p>
           <p className="mt-1 text-xs">Desenvolvido por Marcos Felipe</p>
         </div>
       </footer>

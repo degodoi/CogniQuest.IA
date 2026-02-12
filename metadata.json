@@ -1,5 +1,5 @@
 {
-  "name": "CogniQuest.IA - Preparatório Vigia e Motorista",
-  "description": "Sistema inteligente CogniQuest.IA de estudo focado na banca Instituto JK para cargos de Vigia e Motorista Categoria D, com geração de questões via IA e análise de desempenho.",
+  "name": "CogniQuest.IA - Preparatório Universal",
+  "description": "Sistema inteligente CogniQuest.IA de estudo universal para concursos. Simula qualquer banca e cargo (Cebraspe, Vunesp, FGV, etc) com geração de questões via IA e análise de desempenho.",
   "requestFramePermissions": []
 }

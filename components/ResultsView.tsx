@@ -1,24 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { AnswerAttempt, Question, StrategicAnalysis, Role, HistoryItem } from '../types';
+import { AnswerAttempt, Question, StrategicAnalysis, ExamProfile, HistoryItem } from '../types';
 import { saveHistory, getHistory, saveErrorQuestion, removeErrorQuestion } from '../services/storageService';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, AreaChart, Area } from 'recharts';
-import { AlertTriangle, Award, BookOpen, Clock, Target, TrendingUp, Layers, Hourglass, Calendar, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Award, BookOpen, Clock, Target, TrendingUp, Layers, Hourglass, Calendar } from 'lucide-react';
 
 interface ResultsViewProps {
   answers: AnswerAttempt[];
   questions: Question[];
   analysis: StrategicAnalysis | null;
-  role: Role;
+  profile: ExamProfile;
   onRestart: () => void;
 }
 
 const COLORS = {
-  correct: '#10B981', // Green 500
-  incorrect: '#EF4444', // Red 500
-  charts: ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1'] // Tailwind palette
+  correct: '#10B981',
+  incorrect: '#EF4444',
 };
 
-const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis, role, onRestart }) => {
+const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis, profile, onRestart }) => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [savedErrorsCount, setSavedErrorsCount] = useState(0);
 
@@ -27,7 +26,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
   const totalTimeSeconds = answers.reduce((acc, curr) => acc + curr.timeSpentSeconds, 0);
   const avgTime = Math.round(totalTimeSeconds / answers.length);
 
-  // Helper to format seconds into readable string (e.g. 1h 30m)
   const formatDuration = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -37,7 +35,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
     return `${s}s`;
   };
 
-  // Process data for Topic Performance Chart
   const topicData = React.useMemo(() => {
     const topics: Record<string, { total: number; correct: number }> = {};
     questions.forEach((q) => {
@@ -54,45 +51,34 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
       Erros: data.total - data.correct,
       total: data.total,
       percentage: Math.round((data.correct / data.total) * 100)
-    })).sort((a, b) => b.percentage - a.percentage); // Sort best performing first
+    })).sort((a, b) => b.percentage - a.percentage);
   }, [questions, answers]);
 
-  // Handle History Saving AND Error Bank Management
   useEffect(() => {
     const processResults = async () => {
-      // 1. Check if this exact session is already in history to avoid duplicates
-      // We use a simple check based on timestamp or if questions match
       const currentHistory = await getHistory();
-      
-      // If we are VIEWING a history item (analysis is passed in immediately), we might not want to re-save.
-      // However, current simple logic is: save ONLY if it's a "fresh" run.
-      // We can detect a fresh run if it's not already in the DB with the exact same date/score combination or ID.
-      // Ideally, the App component should tell us if this is "Review Mode". 
-      // For now, let's just attempt to save if the latest history item isn't identical.
       
       const isDuplicate = currentHistory.length > 0 && 
                           currentHistory[currentHistory.length - 1].score === Math.round((correctCount / answers.length) * 100) &&
                           currentHistory[currentHistory.length - 1].totalQuestions === answers.length &&
-                          Math.abs(currentHistory[currentHistory.length - 1].date - Date.now()) < 5000; // Within 5 seconds
+                          Math.abs(currentHistory[currentHistory.length - 1].date - Date.now()) < 5000;
 
       if (analysis && !isDuplicate) {
-        const item = {
+        const item: Omit<HistoryItem, 'id'> = {
           date: Date.now(),
-          role,
+          profile: profile,
           score: Math.round((correctCount / answers.length) * 100),
           totalQuestions: answers.length,
           totalTimeSeconds: totalTimeSeconds, 
           analysis,
-          questions, // SAVE FULL DATA
-          answers    // SAVE FULL DATA
+          questions,
+          answers
         };
         await saveHistory(item);
         
-        // Refresh local state
         const h = await getHistory();
         setHistory(h);
 
-        // 2. Process Error Bank ONLY for new runs
         let errorsSaved = 0;
         for (const answer of answers) {
           if (!answer.isCorrect) {
@@ -107,13 +93,12 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
         }
         setSavedErrorsCount(errorsSaved);
       } else {
-        // Just load history for charts
         setHistory(currentHistory);
       }
     };
 
     processResults();
-  }, [analysis, correctCount, answers, questions, role, totalTimeSeconds]);
+  }, [analysis, correctCount, answers, questions, profile, totalTimeSeconds]);
 
   const pieData = [
     { name: 'Corretas', value: correctCount },
@@ -147,7 +132,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
   return (
     <div className="w-full max-w-7xl mx-auto space-y-8 animate-fade-in-up pb-12">
       
-      {/* Feedback Banner about Errors */}
       {savedErrorsCount > 0 && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 rounded-xl flex items-center justify-between">
           <div className="flex items-center">
@@ -155,15 +139,19 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
             <div>
               <h4 className="font-bold text-amber-800 dark:text-amber-200">Atenção aos Detalhes</h4>
               <p className="text-sm text-amber-700 dark:text-amber-300">
-                {savedErrorsCount} questões que você errou foram salvas no <strong>Banco de Erros</strong>. 
-                Use a opção "Revisar Erros" na tela inicial para praticá-las novamente.
+                {savedErrorsCount} erros foram salvos para revisão.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Top Key Metrics Cards */}
+      {/* Profile Header in Results */}
+      <div className="text-center mb-4">
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Resultado: {profile.cargo}</h2>
+        <p className="text-sm text-gray-500">{profile.banca} - Nível {profile.escolaridade}</p>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Score Card */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
@@ -212,11 +200,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
         {/* Left Column: Charts */}
         <div className="lg:col-span-2 space-y-8">
           
-          {/* Main Visuals Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-             {/* Donut Chart - Overall */}
+             {/* Donut Chart */}
              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-               <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4 text-center">Resumo de Acertos</h3>
+               <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4 text-center">Resumo</h3>
                <div className="h-64 w-full relative">
                  <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -237,7 +224,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                     <Legend verticalAlign="bottom" height={36} iconType="circle"/>
                   </PieChart>
                 </ResponsiveContainer>
-                {/* Center Text */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="text-center">
                     <span className="block text-3xl font-bold text-gray-800 dark:text-white">{Math.round((correctCount / answers.length) * 100)}%</span>
@@ -246,11 +232,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                </div>
              </div>
 
-             {/* Topic Performance - Horizontal Bar */}
+             {/* Topic Performance */}
              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center justify-center">
                   <Layers className="w-5 h-5 mr-2 text-indigo-500" />
-                  Desempenho por Matéria
+                  Matérias
                 </h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -277,15 +263,12 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
              </div>
           </div>
 
-          {/* History & Study Time Section */}
+          {/* History */}
           {history.length > 0 && (
             <div className="space-y-6">
-              
-              {/* Lifetime Stats Banner */}
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold opacity-90">Total de Horas Estudadas</h3>
-                  <p className="text-sm opacity-75">Somando todos os simulados realizados</p>
+                  <h3 className="text-lg font-semibold opacity-90">Total de Horas</h3>
                 </div>
                 <div className="text-right">
                   <div className="text-4xl font-bold flex items-center gap-2">
@@ -295,14 +278,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                 </div>
               </div>
 
-              {/* Chart Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
-                {/* Evolution Line Chart */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                   <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-6 flex items-center">
                     <TrendingUp className="w-5 h-5 mr-2 text-blue-500" />
-                    Evolução da Nota
+                    Evolução
                   </h3>
                   <div className="h-60 w-full">
                     <ResponsiveContainer width="100%" height="100%">
@@ -314,22 +294,19 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                         <Line 
                           type="monotone" 
                           dataKey="nota" 
-                          name="Nota (%)"
                           stroke="#3B82F6" 
                           strokeWidth={3} 
                           dot={{r: 4, fill: '#3B82F6', strokeWidth: 2, stroke: '#fff'}} 
-                          activeDot={{r: 6}} 
                         />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                {/* Study Time Area Chart */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                   <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-6 flex items-center">
                     <Calendar className="w-5 h-5 mr-2 text-purple-500" />
-                    Tempo por Sessão (min)
+                    Tempo (min)
                   </h3>
                   <div className="h-60 w-full">
                     <ResponsiveContainer width="100%" height="100%">
@@ -347,8 +324,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                         <Area 
                           type="monotone" 
                           dataKey="minutos" 
-                          name="Minutos"
-                          unit="min"
                           stroke="#8B5CF6" 
                           fillOpacity={1} 
                           fill="url(#colorTime)" 
@@ -357,7 +332,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                     </ResponsiveContainer>
                   </div>
                 </div>
-              
               </div>
             </div>
           )}
@@ -373,19 +347,16 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
             
             {analysis ? (
               <div className="space-y-6 overflow-y-auto flex-1 custom-scrollbar pr-2">
-                
-                {/* Banca Pattern */}
                 <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-200 dark:border-amber-700/30">
                   <h4 className="font-bold text-amber-800 dark:text-amber-200 flex items-center mb-3 text-sm uppercase tracking-wide">
                     <AlertTriangle className="w-4 h-4 mr-2" />
-                    Padrão Instituto JK
+                    Padrão {profile.banca}
                   </h4>
                   <p className="text-sm text-amber-900 dark:text-amber-100 leading-relaxed whitespace-pre-wrap">
                     {analysis.bancaPattern}
                   </p>
                 </div>
 
-                {/* Recommendations */}
                 <div className="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-200 dark:border-indigo-700/30">
                   <h4 className="font-bold text-indigo-800 dark:text-indigo-200 mb-3 text-sm uppercase tracking-wide">
                     Plano de Estudo
@@ -395,7 +366,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                   </p>
                 </div>
 
-                {/* Strengths/Weaknesses */}
                 <div className="grid grid-cols-1 gap-4">
                    <div>
                     <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Pontos Fortes</h4>
@@ -429,7 +399,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                  </div>
                  <div className="text-center space-y-2">
                    <p className="font-medium text-gray-600 dark:text-gray-300">Consultando a IA...</p>
-                   <p className="text-xs max-w-[200px] mx-auto">Analisando seu desempenho e comparando com o histórico da banca.</p>
+                   <p className="text-xs max-w-[200px] mx-auto">Analisando o padrão da banca {profile.banca}...</p>
                  </div>
                </div>
             )}

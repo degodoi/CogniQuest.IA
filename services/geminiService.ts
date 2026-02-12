@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { Question, Role, UploadedFile, StrategicAnalysis, AnswerAttempt } from "../types";
+import { Question, ExamProfile, UploadedFile, StrategicAnalysis, AnswerAttempt } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -17,25 +17,21 @@ const questionSchema: Schema = {
       },
       correctIndex: { type: Type.INTEGER, description: "Zero-based index of the correct answer." },
       explanation: { type: Type.STRING, description: "Detailed, step-by-step didactic explanation." },
-      topic: { type: Type.STRING, description: "The subject (e.g., Português, Matemática, Legislação, Mecânica)." }
+      topic: { type: Type.STRING, description: "The subject (e.g., Português, Informática, Direito Penal, etc)." }
     },
     required: ["text", "options", "correctIndex", "explanation", "topic"],
   },
 };
 
-// Helper to clean and parse JSON from LLM response
 const cleanAndParseJSON = (text: string): any => {
   try {
-    // 1. Try direct parse
     return JSON.parse(text);
   } catch (e) {
-    // 2. Try stripping markdown code blocks
     try {
       const match = text.match(/```json\s*([\s\S]*?)\s*```/);
       if (match && match[1]) {
         return JSON.parse(match[1]);
       }
-      // 3. Try finding the array brackets directly
       const start = text.indexOf('[');
       const end = text.lastIndexOf(']');
       if (start !== -1 && end !== -1) {
@@ -49,84 +45,46 @@ const cleanAndParseJSON = (text: string): any => {
 };
 
 export const generateQuestions = async (
-  role: Role, 
+  profile: ExamProfile, 
   files: UploadedFile[], 
   extraContext: string
 ): Promise<Question[]> => {
   
   const model = "gemini-3-flash-preview";
-  
-  // Logic to determine if we are in "Automatic Mode" (No files)
   const isAutomaticMode = files.length === 0;
 
   const totalQuestions = 40;
   const batchSize = 10;
   const batches = totalQuestions / batchSize;
   
-  // Define syllabus based on Role to force diversity
-  let subjectsInstruction = "";
-  if (role === Role.MOTORISTA) {
-    subjectsInstruction = `
-    ESTRUTURA OBRIGATÓRIA DA PROVA (Motorista):
-    O simulado DEVE conter uma mistura equilibrada dos seguintes assuntos (NÃO gere apenas legislação):
-    1. LÍNGUA PORTUGUESA (Interpretação de texto, ortografia, acentuação, classes de palavras).
-    2. MATEMÁTICA (Operações fundamentais, regra de três, porcentagem, situações-problema).
-    3. CONHECIMENTOS GERAIS (Atualidades do Brasil, aspectos históricos/geográficos).
-    4. CONHECIMENTOS ESPECÍFICOS:
-       - Legislação de Trânsito (CTB).
-       - Direção Defensiva.
-       - Noções de Mecânica Básica.
-       - Primeiros Socorros.
-       - Respeito ao Meio Ambiente e Cidadania.
-    `;
-  } else {
-    subjectsInstruction = `
-    ESTRUTURA OBRIGATÓRIA DA PROVA (Vigia):
-    O simulado DEVE conter uma mistura equilibrada dos seguintes assuntos:
-    1. LÍNGUA PORTUGUESA (Interpretação, gramática básica).
-    2. MATEMÁTICA (Raciocínio lógico, operações básicas).
-    3. CONHECIMENTOS GERAIS.
-    4. CONHECIMENTOS ESPECÍFICOS:
-       - Técnicas de Vigilância e Segurança Patrimonial.
-       - Ética e Cidadania.
-       - Noções de Direito Constitucional/Penal (básico para vigia).
-       - Atendimento ao público.
-    `;
-  }
-  
   const promises = [];
 
   for (let i = 0; i < batches; i++) {
     promises.push(
       (async () => {
-        // --- ATTEMPT 1: WITH GOOGLE SEARCH (Ideal) ---
         try {
+          // Dynamic System Instruction based on Profile
           let systemInstruction = `
-            Você é um professor particular experiente em concursos da banca 'Instituto JK', preparando um aluno para o cargo de ${role}.
+            Você é um examinador especialista na banca '${profile.banca}', criando uma prova simulada para o cargo de '${profile.cargo}' (Nível ${profile.escolaridade}).
             
             SUA MISSÃO:
-            1. Gerar questões que simulem fielmente a banca Instituto JK.
-            2. O gabarito/explicação deve ser EXTREMAMENTE DIDÁTICO.
-            
-            ${subjectsInstruction}
-
-            REGRAS PARA A EXPLICAÇÃO:
-            - Matemática: Arme a conta passo a passo.
-            - Legislação: Cite o artigo e dê exemplo prático.
-            - Português: Explique a regra gramatical.
+            1. Analisar o perfil da banca '${profile.banca}' e o cargo '${profile.cargo}'.
+            2. Selecionar automaticamente as matérias mais cobradas para este cargo (Ex: Se for Administrativo, cobrar Português/Informática/Adm; Se for Policial, cobrar Direito Penal/Processual, etc).
+            3. Gerar questões INÉDITAS que imitem o estilo da banca (tamanho do texto, tipo de pegadinha, dificuldade).
+            4. O gabarito/explicação deve ser EXTREMAMENTE DIDÁTICO, ensinando o aluno.
           `;
 
           if (isAutomaticMode) {
-            systemInstruction += `\nMODO AUTOMÁTICO: Use a 'googleSearch' para encontrar questões REAIS ou SIMILARES da banca Instituto JK recentes que cubram TODOS os tópicos listados acima.`;
+            systemInstruction += `\nMODO AUTOMÁTICO: Use a 'googleSearch' para identificar o conteúdo programático real ou provável para '${profile.cargo}' na banca '${profile.banca}'.`;
           }
 
-          let prompt = `Gere ${batchSize} questões INÉDITAS para ${role} (Banca Instituto JK) para o Lote ${i + 1}.`;
-          prompt += `\nIMPORTANTE: Neste lote de ${batchSize} questões, misture Português, Matemática e Conhecimentos Específicos. Não foque em um só tema.`;
+          let prompt = `Gere ${batchSize} questões para o cargo de ${profile.cargo} (${profile.escolaridade}) - Banca ${profile.banca}. Lote ${i + 1}.`;
+          prompt += `\nIMPORTANTE: Garanta uma distribuição realista das matérias conforme o edital típico dessa banca para este cargo.`;
           
-          if (extraContext) prompt += `\nContexto Extra do Usuário: "${extraContext}".`;
+          if (extraContext) prompt += `\nFoco/Pedido do Usuário: "${extraContext}".`;
           
           if (files.length > 0) {
-            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como referência. Se os arquivos forem focados em apenas um tema (ex: só tem PDF de leis), use seu CONHECIMENTO INTERNO para gerar as questões de Português e Matemática que faltam, garantindo um simulado completo.`;
+            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como base de conteúdo. Se os arquivos não cobrirem todo o edital (ex: usuário só enviou PDF de lei), use seu conhecimento da banca para gerar as outras matérias (Português, Raciocínio Lógico, etc) e completar o simulado.`;
           }
 
           const parts: any[] = [{ text: prompt }];
@@ -141,60 +99,46 @@ export const generateQuestions = async (
               systemInstruction: systemInstruction,
               responseMimeType: "application/json",
               responseSchema: questionSchema,
-              tools: [{ googleSearch: {} }], // Try using search tool
+              tools: [{ googleSearch: {} }],
               thinkingConfig: { thinkingBudget: 1024 },
             },
           });
 
-          if (!response.text) throw new Error("Empty response with search");
+          if (!response.text) throw new Error("Empty response");
           return response;
 
         } catch (searchError) {
-          console.warn(`Batch ${i} failed with Search (likely API tier limit). Retrying without Search...`, searchError);
+          console.warn(`Batch ${i} failed with Search. Retrying fallback...`, searchError);
           
-          // --- ATTEMPT 2: FALLBACK WITHOUT SEARCH (Reliable) ---
+          // Fallback Strategy
           try {
-             let fallbackSystemInstruction = `
-              Você é um professor especialista em concursos da banca Instituto JK.
-              ATENÇÃO: A busca na web falhou. Use seu CONHECIMENTO INTERNO.
-              
-              ${subjectsInstruction}
-
-              Certifique-se de que o lote tenha variedade de matérias (Português, Matemática, Específicas).
-              Crie questões desafiadoras e realistas para ${role}.
-              Mantenha as explicações EXTREMAMENTE DIDÁTICAS.
+            let fallbackInstruction = `
+              Você é um especialista na banca ${profile.banca}.
+              Crie uma prova realista para ${profile.cargo} (${profile.escolaridade}).
+              Use seu conhecimento interno para definir as matérias corretas (Português, Matemática, Específicas, etc).
             `;
-
-            let fallbackPrompt = `Gere ${batchSize} questões INÉDITAS para ${role} simulando a banca Instituto JK com seu conhecimento interno.`;
-            fallbackPrompt += `\nMisture as matérias (Português, Matemática, Específicas) neste lote.`;
-
-            if (extraContext) fallbackPrompt += `\nContexto: "${extraContext}".`;
             
-            if (files.length > 0) {
-                 fallbackPrompt += `\nCombine o conteúdo dos arquivos anexos com seu conhecimento geral da banca para criar um simulado completo. Se faltar matéria nos arquivos, complete com seu conhecimento.`;
-            }
+            let fallbackPrompt = `Gere ${batchSize} questões variadas para ${profile.cargo} - Banca ${profile.banca}.`;
+            if (extraContext) fallbackPrompt += `\nContexto: ${extraContext}`;
 
-            // Re-build parts for fallback (include files if present)
-            const fallbackParts: any[] = [{ text: fallbackPrompt }];
-            files.forEach(file => {
-              fallbackParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
-            });
+             const fallbackParts: any[] = [{ text: fallbackPrompt }];
+             files.forEach(file => {
+                fallbackParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
+             });
 
             const fallbackResponse = await ai.models.generateContent({
               model: model,
               contents: { parts: fallbackParts },
               config: {
-                systemInstruction: fallbackSystemInstruction,
+                systemInstruction: fallbackInstruction,
                 responseMimeType: "application/json",
                 responseSchema: questionSchema,
-                tools: [], // NO TOOLS - Pure generation
+                tools: [], 
                 thinkingConfig: { thinkingBudget: 1024 },
               },
             });
-
             return fallbackResponse;
-          } catch (fallbackError) {
-            console.error(`Batch ${i} failed completely.`, fallbackError);
+          } catch (e) {
             return null;
           }
         }
@@ -212,18 +156,12 @@ export const generateQuestions = async (
           const batchQuestions = cleanAndParseJSON(response.text);
           if (Array.isArray(batchQuestions)) {
             allQuestions = [...allQuestions, ...batchQuestions];
-          } else {
-            console.error(`Batch ${idx} result is not an array:`, batchQuestions);
           }
         } catch (e) {
-          console.error(`Failed to parse batch ${idx} json:`, response.text, e);
+          console.error(`Failed to parse batch ${idx}`, e);
         }
       }
     });
-
-    if (allQuestions.length === 0) {
-      console.warn("No questions were generated from any batch.");
-    }
 
     return allQuestions.map((q: any, index: number) => ({
       ...q,
@@ -232,12 +170,12 @@ export const generateQuestions = async (
 
   } catch (error) {
     console.error("Error generating questions:", error);
-    throw new Error("Falha ao gerar questões. Tente novamente.");
+    throw new Error("Falha ao gerar questões.");
   }
 };
 
 export const analyzePerformanceAndPattern = async (
-  role: Role,
+  profile: ExamProfile,
   answers: AnswerAttempt[],
   questions: Question[]
 ): Promise<StrategicAnalysis> => {
@@ -248,7 +186,6 @@ export const analyzePerformanceAndPattern = async (
   
   const topicPerformance: Record<string, { total: number, correct: number }> = {};
   questions.forEach(q => {
-    // Normalize topic names to avoid "Matemática" vs "Matematica" duplication
     const topic = q.topic.trim(); 
     if (!topicPerformance[topic]) topicPerformance[topic] = { total: 0, correct: 0 };
     topicPerformance[topic].total++;
@@ -257,23 +194,22 @@ export const analyzePerformanceAndPattern = async (
   });
 
   const topicSummary = Object.entries(topicPerformance)
-    .map(([topic, stats]) => `- ${topic}: ${stats.correct}/${stats.total} acertos (${Math.round(stats.correct/stats.total*100)}%)`)
+    .map(([topic, stats]) => `- ${topic}: ${stats.correct}/${stats.total} acertos`)
     .join("\n");
 
   const prompt = `
-    Aja como um coach de concursos. Analise o desempenho:
-    
-    Cargo: ${role}
-    Banca Alvo: Instituto JK
+    Aja como um coach de concursos.
+    Analise o desempenho para:
+    Cargo: ${profile.cargo} (${profile.escolaridade})
+    Banca: ${profile.banca}
     
     Dados:
-    Acertos Totais: ${correctCount} de ${total}
-    Por Matéria:
+    Acertos: ${correctCount}/${total}
     ${topicSummary}
 
-    1. Identifique os pontos críticos. Onde o aluno vai reprovar se não melhorar?
-    2. Pesquise sobre a banca Instituto JK (se possível) ou use conhecimento geral de bancas similares. Explique isso no campo 'bancaPattern'.
-    3. Crie um plano de ação prático no 'recommendations'. Diga exatamente o que estudar.
+    1. Identifique pontos críticos baseados no peso típico dessas matérias para a banca ${profile.banca}.
+    2. Pesquise sobre o "Padrão ${profile.banca}" (estilo de cobrança, pegadinhas comuns).
+    3. Crie um plano de ação.
   `;
 
   const schema: Schema = {
@@ -281,14 +217,13 @@ export const analyzePerformanceAndPattern = async (
     properties: {
       strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
       weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } },
-      bancaPattern: { type: Type.STRING, description: "Detailed analysis of the exam board style." },
+      bancaPattern: { type: Type.STRING, description: "Analysis of the exam board style." },
       recommendations: { type: Type.STRING, description: "Study plan advice." }
     },
     required: ["strengths", "weaknesses", "bancaPattern", "recommendations"]
   };
 
   try {
-    // Try with search first for analysis
     const response = await ai.models.generateContent({
       model: model,
       contents: { parts: [{ text: prompt }] },
@@ -298,33 +233,15 @@ export const analyzePerformanceAndPattern = async (
         tools: [{ googleSearch: {} }]
       }
     });
-
-    if (response.text) return cleanAndParseJSON(response.text) as StrategicAnalysis;
-    throw new Error("Empty analysis response");
-
+    if (response.text) return cleanAndParseJSON(response.text);
+    throw new Error("Empty analysis");
   } catch (error) {
-    console.warn("Analysis search failed, trying fallback...", error);
-    try {
-      // Fallback analysis without search
-       const response = await ai.models.generateContent({
-        model: model,
-        contents: { parts: [{ text: prompt }] },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: schema,
-          tools: [] // No tools
-        }
-      });
-      if (response.text) return cleanAndParseJSON(response.text) as StrategicAnalysis;
-    } catch(e) {
-      console.error("Analysis failed completely", e);
-    }
-    
-    return {
+     // Fallback
+     return {
       strengths: [],
       weaknesses: [],
-      bancaPattern: "Não foi possível analisar o padrão no momento.",
-      recommendations: "Continue estudando os tópicos onde errou mais questões."
+      bancaPattern: `Análise do padrão da banca ${profile.banca} indisponível no momento.`,
+      recommendations: "Foque nos tópicos com maior taxa de erro."
     };
   }
 };
@@ -338,25 +255,19 @@ export const getTutorResponse = async (
   const model = "gemini-3-flash-preview";
 
   const systemInstruction = `
-    Você é um professor particular paciente e didático.
-    O aluno está com dúvida em uma questão de concurso (Banca Instituto JK).
-    
-    Questão: "${question.text}"
+    Você é um professor particular de elite.
+    O aluno está estudando a questão: "${question.text}"
     Opções: ${JSON.stringify(question.options)}
-    Correta: ${question.options[question.correctIndex]}
-    O aluno marcou: ${userAnswerIndex !== null ? question.options[userAnswerIndex] : "Não respondeu"}
+    Gabarito: ${question.options[question.correctIndex]}
     
-    Se o aluno perguntar "Por que errei?", explique o erro específico da opção dele.
-    Use linguagem simples, analogias e exemplos práticos. Seja breve e direto.
+    Responda a dúvida do aluno de forma clara, direta e motivadora.
   `;
 
   const response = await ai.models.generateContent({
     model: model,
-    contents: `Histórico da conversa:\n${history}\n\nAluno: ${userQuery}`,
-    config: {
-      systemInstruction: systemInstruction,
-    },
+    contents: `Histórico:\n${history}\n\nAluno: ${userQuery}`,
+    config: { systemInstruction },
   });
 
-  return response.text || "Desculpe, não consegui gerar uma explicação agora.";
+  return response.text || "Sem resposta.";
 };
