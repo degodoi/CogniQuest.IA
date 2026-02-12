@@ -17,7 +17,7 @@ const questionSchema: Schema = {
       },
       correctIndex: { type: Type.INTEGER, description: "Zero-based index of the correct answer." },
       explanation: { type: Type.STRING, description: "Detailed, step-by-step didactic explanation." },
-      topic: { type: Type.STRING, description: "The subject (e.g., Português, Matemática, Legislação)." }
+      topic: { type: Type.STRING, description: "The subject (e.g., Português, Matemática, Legislação, Mecânica)." }
     },
     required: ["text", "options", "correctIndex", "explanation", "topic"],
   },
@@ -63,6 +63,37 @@ export const generateQuestions = async (
   const batchSize = 10;
   const batches = totalQuestions / batchSize;
   
+  // Define syllabus based on Role to force diversity
+  let subjectsInstruction = "";
+  if (role === Role.MOTORISTA) {
+    subjectsInstruction = `
+    ESTRUTURA OBRIGATÓRIA DA PROVA (Motorista):
+    O simulado DEVE conter uma mistura equilibrada dos seguintes assuntos (NÃO gere apenas legislação):
+    1. LÍNGUA PORTUGUESA (Interpretação de texto, ortografia, acentuação, classes de palavras).
+    2. MATEMÁTICA (Operações fundamentais, regra de três, porcentagem, situações-problema).
+    3. CONHECIMENTOS GERAIS (Atualidades do Brasil, aspectos históricos/geográficos).
+    4. CONHECIMENTOS ESPECÍFICOS:
+       - Legislação de Trânsito (CTB).
+       - Direção Defensiva.
+       - Noções de Mecânica Básica.
+       - Primeiros Socorros.
+       - Respeito ao Meio Ambiente e Cidadania.
+    `;
+  } else {
+    subjectsInstruction = `
+    ESTRUTURA OBRIGATÓRIA DA PROVA (Vigia):
+    O simulado DEVE conter uma mistura equilibrada dos seguintes assuntos:
+    1. LÍNGUA PORTUGUESA (Interpretação, gramática básica).
+    2. MATEMÁTICA (Raciocínio lógico, operações básicas).
+    3. CONHECIMENTOS GERAIS.
+    4. CONHECIMENTOS ESPECÍFICOS:
+       - Técnicas de Vigilância e Segurança Patrimonial.
+       - Ética e Cidadania.
+       - Noções de Direito Constitucional/Penal (básico para vigia).
+       - Atendimento ao público.
+    `;
+  }
+  
   const promises = [];
 
   for (let i = 0; i < batches; i++) {
@@ -77,6 +108,8 @@ export const generateQuestions = async (
             1. Gerar questões que simulem fielmente a banca Instituto JK.
             2. O gabarito/explicação deve ser EXTREMAMENTE DIDÁTICO.
             
+            ${subjectsInstruction}
+
             REGRAS PARA A EXPLICAÇÃO:
             - Matemática: Arme a conta passo a passo.
             - Legislação: Cite o artigo e dê exemplo prático.
@@ -84,16 +117,16 @@ export const generateQuestions = async (
           `;
 
           if (isAutomaticMode) {
-            systemInstruction += `\nMODO AUTOMÁTICO: Use a 'googleSearch' para encontrar questões REAIS ou SIMILARES da banca Instituto JK recentes.`;
+            systemInstruction += `\nMODO AUTOMÁTICO: Use a 'googleSearch' para encontrar questões REAIS ou SIMILARES da banca Instituto JK recentes que cubram TODOS os tópicos listados acima.`;
           }
 
-          let prompt = `Gere ${batchSize} questões INÉDITAS para ${role} (Banca Instituto JK). Lote ${i + 1}.`;
+          let prompt = `Gere ${batchSize} questões INÉDITAS para ${role} (Banca Instituto JK) para o Lote ${i + 1}.`;
+          prompt += `\nIMPORTANTE: Neste lote de ${batchSize} questões, misture Português, Matemática e Conhecimentos Específicos. Não foque em um só tema.`;
           
-          if (extraContext) prompt += `\nContexto: "${extraContext}".`;
+          if (extraContext) prompt += `\nContexto Extra do Usuário: "${extraContext}".`;
           
           if (files.length > 0) {
-            // Updated prompt to prevent "stuck" behavior on limited PDFs
-            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como referência principal de conteúdo. PORÉM, se os arquivos não cobrirem tópicos suficientes para criar questões variadas, use seu conhecimento interno sobre a banca e o cargo para complementar. Não deixe de gerar questões.`;
+            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como referência. Se os arquivos forem focados em apenas um tema (ex: só tem PDF de leis), use seu CONHECIMENTO INTERNO para gerar as questões de Português e Matemática que faltam, garantindo um simulado completo.`;
           }
 
           const parts: any[] = [{ text: prompt }];
@@ -122,17 +155,23 @@ export const generateQuestions = async (
           // --- ATTEMPT 2: FALLBACK WITHOUT SEARCH (Reliable) ---
           try {
              let fallbackSystemInstruction = `
-              Você é um professor especialista em concursos.
-              ATENÇÃO: A busca na web falhou. Use seu CONHECIMENTO INTERNO para simular o estilo da banca 'Instituto JK'.
+              Você é um professor especialista em concursos da banca Instituto JK.
+              ATENÇÃO: A busca na web falhou. Use seu CONHECIMENTO INTERNO.
+              
+              ${subjectsInstruction}
+
+              Certifique-se de que o lote tenha variedade de matérias (Português, Matemática, Específicas).
               Crie questões desafiadoras e realistas para ${role}.
-              Mantenha as explicações EXTREMAMENTE DIDÁTICAS conforme solicitado anteriormente.
+              Mantenha as explicações EXTREMAMENTE DIDÁTICAS.
             `;
 
             let fallbackPrompt = `Gere ${batchSize} questões INÉDITAS para ${role} simulando a banca Instituto JK com seu conhecimento interno.`;
+            fallbackPrompt += `\nMisture as matérias (Português, Matemática, Específicas) neste lote.`;
+
             if (extraContext) fallbackPrompt += `\nContexto: "${extraContext}".`;
             
             if (files.length > 0) {
-                 fallbackPrompt += `\nCombine o conteúdo dos arquivos anexos com seu conhecimento geral da banca para criar um simulado completo.`;
+                 fallbackPrompt += `\nCombine o conteúdo dos arquivos anexos com seu conhecimento geral da banca para criar um simulado completo. Se faltar matéria nos arquivos, complete com seu conhecimento.`;
             }
 
             // Re-build parts for fallback (include files if present)
