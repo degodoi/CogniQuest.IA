@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UploadedFile, ExamProfile, Question, HistoryItem, StrategicAnalysis } from '../types';
 import { saveFile, getFiles, deleteFile, getErrorQuestions, getHistory } from '../services/storageService';
-import { UploadCloud, FileText, Trash2, BookOpen, BrainCircuit, Play, Flame, History, Building2, Briefcase, GraduationCap, Trophy, Target, Clock, TrendingUp, Lightbulb } from 'lucide-react';
+import { UploadCloud, FileText, Trash2, BookOpen, BrainCircuit, Play, Flame, History, Building2, Briefcase, GraduationCap, Trophy, Target, Clock, TrendingUp, Lightbulb, ListOrdered } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 
 interface UploadSectionProps {
@@ -22,6 +22,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
   const [banca, setBanca] = useState('');
   const [cargo, setCargo] = useState('');
   const [escolaridade, setEscolaridade] = useState<'Fundamental' | 'Médio' | 'Superior'>('Médio');
+  const [qCount, setQCount] = useState<10 | 20 | 30 | 40>(10); // Default to 10 for quick start
 
   const [storedFiles, setStoredFiles] = useState<UploadedFile[]>([]);
   const [errorQuestions, setErrorQuestions] = useState<Question[]>([]);
@@ -45,6 +46,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
         if (parsed.banca) setBanca(parsed.banca);
         if (parsed.cargo) setCargo(parsed.cargo);
         if (parsed.escolaridade) setEscolaridade(parsed.escolaridade);
+        if (parsed.qCount) setQCount(parsed.qCount);
       } catch (e) {
         console.error("Failed to load preferences", e);
       }
@@ -52,7 +54,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
   };
 
   const savePreferences = () => {
-    const profile = { banca, cargo, escolaridade };
+    const profile = { banca, cargo, escolaridade, qCount };
     localStorage.setItem('lastExamProfile', JSON.stringify(profile));
   };
 
@@ -154,7 +156,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
     }
     savePreferences(); // Auto-save
     updateStreakOnStart();
-    const profile: ExamProfile = { banca, cargo, escolaridade };
+    const profile: ExamProfile = { banca, cargo, escolaridade, qCount };
     onStart(profile, storedFiles, context);
   };
 
@@ -368,7 +370,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
                 />
               </div>
 
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
                   <GraduationCap className="w-4 h-4 mr-1 text-indigo-500" /> Nível de Escolaridade
                 </label>
@@ -388,6 +390,28 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
                   ))}
                 </div>
               </div>
+
+              <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+                  <ListOrdered className="w-4 h-4 mr-1 text-indigo-500" /> Quantidade de Questões
+                </label>
+                <div className="flex gap-2">
+                  {([10, 20, 30, 40] as const).map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setQCount(num)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all border ${
+                        qCount === num 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
+                          : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
             </div>
 
             {/* File Upload */}
@@ -455,7 +479,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
               {isLoading ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  <span>Gerando Simulado...</span>
+                  <span>Gerando Simulado ({qCount} questões)...</span>
                 </div>
               ) : (
                   "Iniciar Simulado Agora"

@@ -53,38 +53,47 @@ export const generateQuestions = async (
   const model = "gemini-3-flash-preview";
   const isAutomaticMode = files.length === 0;
 
-  const totalQuestions = 40;
+  // Use the selected count from profile, default to 10 if missing
+  const totalQuestions = profile.qCount || 10;
   const batchSize = 10;
-  const batches = totalQuestions / batchSize;
+  // Calculate batches needed (e.g. 20 q / 10 = 2 batches)
+  const batches = Math.ceil(totalQuestions / batchSize);
   
   const promises = [];
 
   for (let i = 0; i < batches; i++) {
+    // Determine questions for this specific batch (handles the last partial batch if any)
+    const questionsInBatch = (i === batches - 1 && totalQuestions % batchSize !== 0) 
+      ? totalQuestions % batchSize 
+      : batchSize;
+
     promises.push(
       (async () => {
         try {
-          // Dynamic System Instruction based on Profile
+          // Dynamic System Instruction with Explicit Distribution Rules
           let systemInstruction = `
             Você é um examinador especialista na banca '${profile.banca}', criando uma prova simulada para o cargo de '${profile.cargo}' (Nível ${profile.escolaridade}).
             
             SUA MISSÃO:
-            1. Analisar o perfil da banca '${profile.banca}' e o cargo '${profile.cargo}'.
-            2. Selecionar automaticamente as matérias mais cobradas para este cargo (Ex: Se for Administrativo, cobrar Português/Informática/Adm; Se for Policial, cobrar Direito Penal/Processual, etc).
-            3. Gerar questões INÉDITAS que imitem o estilo da banca (tamanho do texto, tipo de pegadinha, dificuldade).
-            4. O gabarito/explicação deve ser EXTREMAMENTE DIDÁTICO, ensinando o aluno.
+            1. Gerar exatamente ${questionsInBatch} questões para este lote.
+            2. REGRA DE OURO: Você DEVE misturar as matérias NESTE lote de ${questionsInBatch} questões. 
+               - Distribuição Ideal: 30% Língua Portuguesa, 20% Matemática/Raciocínio Lógico, 50% Conhecimentos Específicos do Cargo.
+               - NÃO gere questões de apenas um assunto. O usuário precisa de um mix.
+            3. Estilo: Imite o estilo da banca '${profile.banca}' (tamanho do texto, pegadinhas).
+            4. Explicação: Didática e completa.
           `;
 
           if (isAutomaticMode) {
-            systemInstruction += `\nMODO AUTOMÁTICO: Use a 'googleSearch' para identificar o conteúdo programático real ou provável para '${profile.cargo}' na banca '${profile.banca}'.`;
+            systemInstruction += `\nMODO AUTOMÁTICO: Use a 'googleSearch' para identificar o conteúdo programático real para '${profile.cargo}' na banca '${profile.banca}' e garantir que os tópicos "Específicos" sejam precisos.`;
           }
 
-          let prompt = `Gere ${batchSize} questões para o cargo de ${profile.cargo} (${profile.escolaridade}) - Banca ${profile.banca}. Lote ${i + 1}.`;
-          prompt += `\nIMPORTANTE: Garanta uma distribuição realista das matérias conforme o edital típico dessa banca para este cargo.`;
+          let prompt = `Gere um lote de ${questionsInBatch} questões variadas (Português, Matemática e Específicas) para ${profile.cargo} - Banca ${profile.banca}.`;
+          prompt += `\nIMPORTANTE: Garanta a proporção de matérias solicitada na instrução. O aluno precisa testar todos os conhecimentos agora.`;
           
           if (extraContext) prompt += `\nFoco/Pedido do Usuário: "${extraContext}".`;
           
           if (files.length > 0) {
-            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como base de conteúdo. Se os arquivos não cobrirem todo o edital (ex: usuário só enviou PDF de lei), use seu conhecimento da banca para gerar as outras matérias (Português, Raciocínio Lógico, etc) e completar o simulado.`;
+            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como base. Se os arquivos forem limitados (ex: só tem lei), use seu conhecimento da banca para criar as questões de Português e Matemática que faltam para completar o mix.`;
           }
 
           const parts: any[] = [{ text: prompt }];
@@ -92,6 +101,7 @@ export const generateQuestions = async (
             parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
           });
 
+          // Attempt 1: With Search
           const response = await ai.models.generateContent({
             model: model,
             contents: { parts },
@@ -110,16 +120,15 @@ export const generateQuestions = async (
         } catch (searchError) {
           console.warn(`Batch ${i} failed with Search. Retrying fallback...`, searchError);
           
-          // Fallback Strategy
+          // Fallback Strategy (Simpler model config if first fails)
           try {
             let fallbackInstruction = `
               Você é um especialista na banca ${profile.banca}.
-              Crie uma prova realista para ${profile.cargo} (${profile.escolaridade}).
-              Use seu conhecimento interno para definir as matérias corretas (Português, Matemática, Específicas, etc).
+              Crie uma prova para ${profile.cargo} (${profile.escolaridade}).
+              Gere ${questionsInBatch} questões MISTURANDO: Português, Matemática e Conhecimentos Específicos.
             `;
             
-            let fallbackPrompt = `Gere ${batchSize} questões variadas para ${profile.cargo} - Banca ${profile.banca}.`;
-            if (extraContext) fallbackPrompt += `\nContexto: ${extraContext}`;
+            let fallbackPrompt = `Gere ${questionsInBatch} questões variadas para ${profile.cargo}.`;
 
              const fallbackParts: any[] = [{ text: fallbackPrompt }];
              files.forEach(file => {
@@ -127,18 +136,20 @@ export const generateQuestions = async (
              });
 
             const fallbackResponse = await ai.models.generateContent({
-              model: model,
+              model: model, 
               contents: { parts: fallbackParts },
               config: {
                 systemInstruction: fallbackInstruction,
                 responseMimeType: "application/json",
                 responseSchema: questionSchema,
-                tools: [], 
-                thinkingConfig: { thinkingBudget: 1024 },
+                tools: [], // No tools
+                // Reduced thinking budget or remove if causing timeouts locally
+                thinkingConfig: { thinkingBudget: 1024 }, 
               },
             });
             return fallbackResponse;
           } catch (e) {
+            console.error("Fallback failed", e);
             return null;
           }
         }
@@ -163,14 +174,21 @@ export const generateQuestions = async (
       }
     });
 
-    return allQuestions.map((q: any, index: number) => ({
+    // Limit to requested count in case AI generated extra
+    const finalQuestions = allQuestions.slice(0, totalQuestions);
+
+    if (finalQuestions.length === 0) {
+        throw new Error("Nenhuma questão foi gerada. Tente novamente ou verifique sua conexão.");
+    }
+
+    return finalQuestions.map((q: any, index: number) => ({
       ...q,
       id: `q-${Date.now()}-${index}`
     }));
 
   } catch (error) {
     console.error("Error generating questions:", error);
-    throw new Error("Falha ao gerar questões.");
+    throw new Error("Falha ao gerar questões. Verifique sua chave de API ou conexão.");
   }
 };
 

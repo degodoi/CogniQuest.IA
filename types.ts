@@ -4,6 +4,7 @@ export interface ExamProfile {
   banca: string;
   cargo: string;
   escolaridade: 'Fundamental' | 'Médio' | 'Superior';
+  qCount: 10 | 20 | 30 | 40; // New field for question quantity
 }
 
 export interface Question {
@@ -54,8 +55,6 @@ export interface StrategicAnalysis {
 export interface HistoryItem {
   id: number;
   date: number;
-  // profile replaces the old 'role' string. 
-  // We keep 'roleLabel' for display purposes or backward compat logic if needed
   profile: ExamProfile; 
   score: number;
   totalQuestions: number;
