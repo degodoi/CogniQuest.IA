@@ -23,6 +23,31 @@ const questionSchema: Schema = {
   },
 };
 
+// Helper to clean and parse JSON from LLM response
+const cleanAndParseJSON = (text: string): any => {
+  try {
+    // 1. Try direct parse
+    return JSON.parse(text);
+  } catch (e) {
+    // 2. Try stripping markdown code blocks
+    try {
+      const match = text.match(/```json\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        return JSON.parse(match[1]);
+      }
+      // 3. Try finding the array brackets directly
+      const start = text.indexOf('[');
+      const end = text.lastIndexOf(']');
+      if (start !== -1 && end !== -1) {
+        return JSON.parse(text.substring(start, end + 1));
+      }
+    } catch (innerE) {
+      console.error("Failed to clean and parse JSON:", innerE);
+    }
+    throw new Error("Invalid JSON format from model");
+  }
+};
+
 export const generateQuestions = async (
   role: Role, 
   files: UploadedFile[], 
@@ -112,10 +137,17 @@ export const generateQuestions = async (
           responseMimeType: "application/json",
           responseSchema: questionSchema,
           tools: [{ googleSearch: {} }], // Busca ativa ativada
-          thinkingConfig: { thinkingBudget: 2048 }, // Aumentado para garantir raciocínio na explicação
+          // Reduced thinking budget slightly to avoid timeouts/limits on batch processing
+          thinkingConfig: { thinkingBudget: 1024 }, 
         },
+      }).then(response => {
+        // Validation check inside the promise to log specific batch success/failure
+        if (!response.text) {
+          console.warn(`Batch ${i} returned empty text.`);
+        }
+        return response;
       }).catch(e => {
-        console.error(`Batch ${i} failed`, e);
+        console.error(`Batch ${i} failed:`, e);
         return null;
       })
     );
@@ -125,16 +157,24 @@ export const generateQuestions = async (
     const results = await Promise.all(promises);
     let allQuestions: Question[] = [];
 
-    results.forEach((response) => {
+    results.forEach((response, idx) => {
       if (response && response.text) {
         try {
-          const batchQuestions = JSON.parse(response.text);
-          allQuestions = [...allQuestions, ...batchQuestions];
+          const batchQuestions = cleanAndParseJSON(response.text);
+          if (Array.isArray(batchQuestions)) {
+            allQuestions = [...allQuestions, ...batchQuestions];
+          } else {
+            console.error(`Batch ${idx} result is not an array:`, batchQuestions);
+          }
         } catch (e) {
-          console.error("Failed to parse batch json", e);
+          console.error(`Failed to parse batch ${idx} json:`, response.text, e);
         }
       }
     });
+
+    if (allQuestions.length === 0) {
+      console.warn("No questions were generated from any batch.");
+    }
 
     return allQuestions.map((q: any, index: number) => ({
       ...q,
@@ -209,8 +249,9 @@ export const analyzePerformanceAndPattern = async (
       }
     });
 
+    // Use cleanAndParseJSON here as well for safety
     if (response.text) {
-      return JSON.parse(response.text) as StrategicAnalysis;
+      return cleanAndParseJSON(response.text) as StrategicAnalysis;
     }
     throw new Error("No analysis returned");
   } catch (error) {

@@ -43,11 +43,15 @@ const App: React.FC = () => {
         setQuestions(generatedQuestions);
         setView(AppView.QUIZ);
       } else {
-        alert("Não foi possível gerar questões. Tente adicionar mais contexto ou arquivos.");
+        const isAuto = files.length === 0;
+        const msg = isAuto 
+          ? "A IA não conseguiu gerar questões automaticamente. Verifique se sua chave de API está válida e permite a ferramenta 'Google Search' (disponível no plano pago ou tier adequado), ou tente novamente."
+          : "Não foi possível gerar questões. Tente adicionar mais contexto ou verificar seus arquivos.";
+        alert(msg);
       }
     } catch (error) {
       console.error(error);
-      alert("Erro ao conectar com a IA. Verifique sua conexão ou tente novamente.");
+      alert("Erro crítico ao conectar com a IA. Verifique o console para mais detalhes (F12).");
     } finally {
       setLoading(false);
     }
