@@ -1,7 +1,17 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, ExamProfile, UploadedFile, StrategicAnalysis, AnswerAttempt } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to safely get the API key
+const getApiKey = () => {
+  const key = process.env.API_KEY; // Direct access as per instructions
+  if (!key) {
+    console.error("API Key is missing in process.env.API_KEY");
+    return "";
+  }
+  return key;
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 // Schema for generating questions
 const questionSchema: Schema = {
@@ -24,23 +34,26 @@ const questionSchema: Schema = {
 };
 
 const cleanAndParseJSON = (text: string): any => {
+  if (!text) throw new Error("Received empty response from AI");
+
+  let cleanText = text.trim();
+  
+  // Remove markdown code blocks if present
+  cleanText = cleanText.replace(/```json/g, "").replace(/```/g, "").trim();
+
+  // Sometimes the model adds text before the array, find the first '[' and last ']'
+  const firstOpen = cleanText.indexOf('[');
+  const lastClose = cleanText.lastIndexOf(']');
+
+  if (firstOpen !== -1 && lastClose !== -1) {
+    cleanText = cleanText.substring(firstOpen, lastClose + 1);
+  }
+
   try {
-    return JSON.parse(text);
+    return JSON.parse(cleanText);
   } catch (e) {
-    try {
-      const match = text.match(/```json\s*([\s\S]*?)\s*```/);
-      if (match && match[1]) {
-        return JSON.parse(match[1]);
-      }
-      const start = text.indexOf('[');
-      const end = text.lastIndexOf(']');
-      if (start !== -1 && end !== -1) {
-        return JSON.parse(text.substring(start, end + 1));
-      }
-    } catch (innerE) {
-      console.error("Failed to clean and parse JSON:", innerE);
-    }
-    throw new Error("Invalid JSON format from model");
+    console.error("JSON Parse Error. Raw Text:", text);
+    throw new Error("A IA gerou uma resposta, mas não foi possível ler o formato (JSON inválido). Tente novamente.");
   }
 };
 
@@ -50,6 +63,12 @@ export const generateQuestions = async (
   extraContext: string
 ): Promise<Question[]> => {
   
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("Chave de API não encontrada. Verifique seu arquivo .env ou a configuração do projeto.");
+  }
+
+  // Use a stable model. Instructions suggest avoiding gemini-1.5-flash, using gemini-3-flash-preview.
   const model = "gemini-3-flash-preview";
   const isAutomaticMode = files.length === 0;
 
@@ -84,7 +103,7 @@ export const generateQuestions = async (
           `;
 
           if (isAutomaticMode) {
-            systemInstruction += `\nMODO AUTOMÁTICO: Use a 'googleSearch' para identificar o conteúdo programático real para '${profile.cargo}' na banca '${profile.banca}' e garantir que os tópicos "Específicos" sejam precisos.`;
+            systemInstruction += `\nMODO AUTOMÁTICO: Tente ser fiel ao conteúdo programático real.`;
           }
 
           let prompt = `Gere um lote de ${questionsInBatch} questões variadas (Português, Matemática e Específicas) para ${profile.cargo} - Banca ${profile.banca}.`;
@@ -101,31 +120,42 @@ export const generateQuestions = async (
             parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
           });
 
-          // Attempt 1: With Search
-          const response = await ai.models.generateContent({
-            model: model,
-            contents: { parts },
-            config: {
-              systemInstruction: systemInstruction,
-              responseMimeType: "application/json",
-              responseSchema: questionSchema,
-              tools: [{ googleSearch: {} }],
-              thinkingConfig: { thinkingBudget: 1024 },
-            },
-          });
+          // Attempt 1: Try with googleSearch if needed, but be ready to failover
+          // Note: googleSearch tools sometimes cause issues on free tiers or specific accounts.
+          // If it fails, we catch and retry without tools.
+          
+          let response;
+          try {
+             response = await ai.models.generateContent({
+              model: model,
+              contents: { parts },
+              config: {
+                systemInstruction: systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: questionSchema,
+                // Only use search if automatic mode (no files), otherwise rely on context or internal knowledge to save tokens/latency
+                tools: isAutomaticMode ? [{ googleSearch: {} }] : [], 
+                thinkingConfig: { thinkingBudget: 1024 },
+              },
+            });
+          } catch (apiError: any) {
+            console.warn(`Batch ${i} primary attempt failed:`, apiError);
+            throw apiError; // Throw to trigger the outer catch (Fallback)
+          }
 
-          if (!response.text) throw new Error("Empty response");
+          if (!response.text) throw new Error("Empty response from AI");
           return response;
 
-        } catch (searchError) {
-          console.warn(`Batch ${i} failed with Search. Retrying fallback...`, searchError);
+        } catch (searchError: any) {
+          console.warn(`Batch ${i} failed. Retrying fallback without tools...`, searchError);
           
-          // Fallback Strategy (Simpler model config if first fails)
+          // Fallback Strategy: No Search, Standard Prompt
           try {
             let fallbackInstruction = `
               Você é um especialista na banca ${profile.banca}.
               Crie uma prova para ${profile.cargo} (${profile.escolaridade}).
               Gere ${questionsInBatch} questões MISTURANDO: Português, Matemática e Conhecimentos Específicos.
+              Retorne APENAS JSON.
             `;
             
             let fallbackPrompt = `Gere ${questionsInBatch} questões variadas para ${profile.cargo}.`;
@@ -143,14 +173,13 @@ export const generateQuestions = async (
                 responseMimeType: "application/json",
                 responseSchema: questionSchema,
                 tools: [], // No tools
-                // Reduced thinking budget or remove if causing timeouts locally
-                thinkingConfig: { thinkingBudget: 1024 }, 
+                thinkingConfig: { thinkingBudget: 512 }, // Lower budget for speed
               },
             });
             return fallbackResponse;
-          } catch (e) {
+          } catch (e: any) {
             console.error("Fallback failed", e);
-            return null;
+            throw new Error(`Falha crítica na API (Fallback): ${e.message || e}`);
           }
         }
       })()
@@ -178,7 +207,7 @@ export const generateQuestions = async (
     const finalQuestions = allQuestions.slice(0, totalQuestions);
 
     if (finalQuestions.length === 0) {
-        throw new Error("Nenhuma questão foi gerada. Tente novamente ou verifique sua conexão.");
+        throw new Error("A IA respondeu, mas não foi possível extrair questões válidas. Tente novamente.");
     }
 
     return finalQuestions.map((q: any, index: number) => ({
@@ -186,9 +215,15 @@ export const generateQuestions = async (
       id: `q-${Date.now()}-${index}`
     }));
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating questions:", error);
-    throw new Error("Falha ao gerar questões. Verifique sua chave de API ou conexão.");
+    // Return a user-friendly error message based on the exception
+    if (error.message.includes("API Key")) throw error;
+    if (error.message.includes("403")) throw new Error("Erro de permissão (403). Verifique se sua API Key tem acesso ao modelo 'gemini-3-flash-preview'.");
+    if (error.message.includes("429")) throw new Error("Muitas requisições (429). Aguarde um momento e tente novamente.");
+    if (error.message.includes("fetch")) throw new Error("Erro de conexão. Verifique sua internet.");
+    
+    throw new Error(`Erro ao gerar simulado: ${error.message}`);
   }
 };
 

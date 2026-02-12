@@ -14,7 +14,8 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<ExamProfile>({
     banca: '',
     cargo: '',
-    escolaridade: 'Médio'
+    escolaridade: 'Médio',
+    qCount: 10
   });
 
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -53,9 +54,10 @@ const App: React.FC = () => {
       } else {
         alert("A IA não conseguiu gerar questões para este perfil. Tente reformular a Banca ou Cargo.");
       }
-    } catch (error) {
-      console.error(error);
-      alert("Erro ao conectar com a IA.");
+    } catch (error: any) {
+      console.error("Erro na App.tsx:", error);
+      // Show the specific error message to the user
+      alert(`Erro: ${error.message || "Erro desconhecido ao conectar com a IA."}`);
     } finally {
       setLoading(false);
     }
