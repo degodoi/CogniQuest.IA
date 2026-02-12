@@ -31,12 +31,15 @@ export const generateQuestions = async (
   
   const model = "gemini-3-flash-preview";
   
-  // Instruções reforçadas para didática e busca
-  const systemInstruction = `
+  // Logic to determine if we are in "Automatic Mode" (No files)
+  const isAutomaticMode = files.length === 0;
+
+  // Base System Instruction
+  let systemInstruction = `
     Você é um professor particular experiente em concursos da banca 'Instituto JK', preparando um aluno para o cargo de ${role}.
     
     SUA MISSÃO:
-    1. Gerar questões que simulem fielmente a banca Instituto JK. Use a ferramenta de busca para encontrar o estilo real deles.
+    1. Gerar questões que simulem fielmente a banca Instituto JK.
     2. O gabarito/explicação deve ser EXTREMAMENTE DIDÁTICO, "como se estivesse ensinando uma criança" ou um leigo total.
     
     REGRAS PARA A EXPLICAÇÃO (GABARITO):
@@ -49,6 +52,18 @@ export const generateQuestions = async (
     - Vigia: Português, Matemática Básica, Atualidades, Noções de Segurança Patrimonial.
   `;
 
+  // If Automatic Mode, reinforce the need for search
+  if (isAutomaticMode) {
+    systemInstruction += `
+    
+    MODO AUTOMÁTICO ATIVADO (SEM ARQUIVOS DO USUÁRIO):
+    - O usuário NÃO enviou PDFs. Você deve usar a ferramenta 'googleSearch' AGRESSIVAMENTE.
+    - Busque por: "Questões banca Instituto JK nível fundamental/médio", "Prova Instituto JK Vigia/Motorista recentes".
+    - Crie questões baseadas no estilo real encontrado na busca. NÃO invente questões genéricas.
+    - Varie os tópicos automaticamente dentro do escopo do cargo.
+    `;
+  }
+
   const totalQuestions = 40;
   const batchSize = 10;
   const batches = totalQuestions / batchSize;
@@ -56,19 +71,29 @@ export const generateQuestions = async (
   const promises = [];
 
   for (let i = 0; i < batches; i++) {
-    const prompt = `
+    // Dynamic prompt based on context presence
+    let prompt = `
       Gere ${batchSize} questões INÉDITAS para ${role} focadas na banca Instituto JK.
       Lote ${i + 1} de ${batches}.
       
       USE A BUSCA DO GOOGLE (googleSearch) para encontrar questões recentes ou similares aplicadas por essa banca.
-      
-      Contexto do usuário: "${extraContext}".
-      
-      Importante: A explicação deve ser detalhada e educativa. O usuário precisa aprender lendo a resposta.
     `;
+
+    if (extraContext) {
+      prompt += `\nContexto extra do usuário: "${extraContext}".`;
+    }
+
+    if (isAutomaticMode) {
+      prompt += `\nComo não há arquivos anexos, assuma o papel de criar um simulado completo e diversificado cobrindo todas as matérias do edital padrão para ${role}.`;
+    } else {
+      prompt += `\nBaseie-se também nos arquivos fornecidos.`;
+    }
+    
+    prompt += `\nImportante: A explicação deve ser detalhada e educativa. O usuário precisa aprender lendo a resposta.`;
 
     const parts: any[] = [{ text: prompt }];
 
+    // Add files if they exist
     files.forEach(file => {
       parts.push({
         inlineData: {

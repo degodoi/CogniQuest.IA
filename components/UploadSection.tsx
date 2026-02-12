@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UploadedFile, Role, Question } from '../types';
 import { saveFile, getFiles, deleteFile, getErrorQuestions } from '../services/storageService';
-import { UploadCloud, FileText, Trash2, BookOpen, Database, BrainCircuit, Play, Flame } from 'lucide-react';
+import { UploadCloud, FileText, Trash2, BookOpen, Database, BrainCircuit, Play, Flame, Search, Sparkles } from 'lucide-react';
 
 interface UploadSectionProps {
   onStart: (role: Role, files: UploadedFile[], context: string) => void;
@@ -202,10 +202,11 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
               </div>
             </div>
 
-            {/* File Upload */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Material de Apoio (PDFs)
+            {/* File Upload - NOW MARKED AS OPTIONAL */}
+            <div className="relative">
+              <label className="flex justify-between items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <span>Material de Apoio (PDFs)</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full">Opcional</span>
               </label>
               
               <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 text-center hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors relative mb-4 group cursor-pointer">
@@ -219,12 +220,13 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
                 <div className="transform group-hover:scale-105 transition-transform duration-300">
                   <UploadCloud className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-2 group-hover:text-blue-500" />
                   <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">Clique ou arraste PDFs aqui</p>
+                  <p className="text-xs text-gray-400 mt-1">Se vazio, a IA usará busca na internet.</p>
                 </div>
               </div>
 
               {/* File List */}
-              <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-3 max-h-32 overflow-y-auto custom-scrollbar border border-gray-100 dark:border-gray-700">
-                {storedFiles.length > 0 ? (
+              {storedFiles.length > 0 && (
+                <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-3 max-h-32 overflow-y-auto custom-scrollbar border border-gray-100 dark:border-gray-700 mb-4">
                   <div className="space-y-2">
                     {storedFiles.map((file, idx) => (
                       <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -240,10 +242,8 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
                       </div>
                     ))}
                   </div>
-                ) : (
-                   <p className="text-xs text-gray-400 text-center italic py-2">Nenhum arquivo adicionado.</p>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
              {/* Context Input */}
@@ -251,7 +251,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
                <textarea
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
-                placeholder="Dica extra para a IA: Ex: 'Quero focar em Direção Defensiva' ou 'Gere perguntas difíceis sobre Crase'..."
+                placeholder="Dica extra (Opcional): Ex: 'Quero focar em Direção Defensiva' ou 'Gere perguntas difíceis sobre Crase'..."
                 className="w-full p-3 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none h-20 placeholder-gray-400 transition-colors"
               />
             </div>
@@ -259,14 +259,35 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
             <button
               onClick={handleStartWrapper}
               disabled={isLoading}
-              className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition-all transform hover:-translate-y-1 active:translate-y-0 ${
+              className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition-all transform hover:-translate-y-1 active:translate-y-0 flex items-center justify-center ${
                 isLoading 
                   ? 'bg-gray-400 dark:bg-gray-600 cursor-wait' 
                   : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500'
               }`}
             >
-              {isLoading ? 'Gerando Questões...' : 'Gerar Simulado (40 Questões)'}
+              {isLoading ? (
+                <span>Gerando Questões...</span>
+              ) : storedFiles.length === 0 ? (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Gerar Automático (Via Web)
+                </>
+              ) : (
+                <>
+                  <FileText className="w-5 h-5 mr-2" />
+                  Gerar Baseado em PDFs
+                </>
+              )}
             </button>
+            
+            {/* Automatic Mode Helper Text */}
+            {storedFiles.length === 0 && !isLoading && (
+              <p className="text-xs text-center text-gray-500 dark:text-gray-400 flex items-center justify-center">
+                <Search className="w-3 h-3 mr-1" />
+                Modo Automático: A IA buscará o perfil da banca na internet.
+              </p>
+            )}
+
           </div>
         </div>
 
