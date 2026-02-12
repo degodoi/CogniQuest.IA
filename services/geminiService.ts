@@ -59,36 +59,6 @@ export const generateQuestions = async (
   // Logic to determine if we are in "Automatic Mode" (No files)
   const isAutomaticMode = files.length === 0;
 
-  // Base System Instruction
-  let systemInstruction = `
-    Você é um professor particular experiente em concursos da banca 'Instituto JK', preparando um aluno para o cargo de ${role}.
-    
-    SUA MISSÃO:
-    1. Gerar questões que simulem fielmente a banca Instituto JK.
-    2. O gabarito/explicação deve ser EXTREMAMENTE DIDÁTICO, "como se estivesse ensinando uma criança" ou um leigo total.
-    
-    REGRAS PARA A EXPLICAÇÃO (GABARITO):
-    - SE FOR MATEMÁTICA: Não diga apenas a resposta. Arme a conta, mostre a soma, subtração, regra de três passo a passo. Exemplo: "Primeiro somamos X + Y...".
-    - SE FOR LEGISLAÇÃO (Motorista): Cite o artigo do CTB, mas explique com um exemplo prático do dia a dia do motorista.
-    - SE FOR PORTUGUÊS: Explique a regra gramatical de forma simples, mostrando por que as outras opções estão erradas.
-    
-    TÓPICOS PRINCIPAIS:
-    - Motorista: CTB, Direção Defensiva, Mecânica Básica, Primeiros Socorros.
-    - Vigia: Português, Matemática Básica, Atualidades, Noções de Segurança Patrimonial.
-  `;
-
-  // If Automatic Mode, reinforce the need for search
-  if (isAutomaticMode) {
-    systemInstruction += `
-    
-    MODO AUTOMÁTICO ATIVADO (SEM ARQUIVOS DO USUÁRIO):
-    - O usuário NÃO enviou PDFs. Você deve usar a ferramenta 'googleSearch' AGRESSIVAMENTE.
-    - Busque por: "Questões banca Instituto JK nível fundamental/médio", "Prova Instituto JK Vigia/Motorista recentes".
-    - Crie questões baseadas no estilo real encontrado na busca. NÃO invente questões genéricas.
-    - Varie os tópicos automaticamente dentro do escopo do cargo.
-    `;
-  }
-
   const totalQuestions = 40;
   const batchSize = 10;
   const batches = totalQuestions / batchSize;
@@ -96,60 +66,91 @@ export const generateQuestions = async (
   const promises = [];
 
   for (let i = 0; i < batches; i++) {
-    // Dynamic prompt based on context presence
-    let prompt = `
-      Gere ${batchSize} questões INÉDITAS para ${role} focadas na banca Instituto JK.
-      Lote ${i + 1} de ${batches}.
-      
-      USE A BUSCA DO GOOGLE (googleSearch) para encontrar questões recentes ou similares aplicadas por essa banca.
-    `;
-
-    if (extraContext) {
-      prompt += `\nContexto extra do usuário: "${extraContext}".`;
-    }
-
-    if (isAutomaticMode) {
-      prompt += `\nComo não há arquivos anexos, assuma o papel de criar um simulado completo e diversificado cobrindo todas as matérias do edital padrão para ${role}.`;
-    } else {
-      prompt += `\nBaseie-se também nos arquivos fornecidos.`;
-    }
-    
-    prompt += `\nImportante: A explicação deve ser detalhada e educativa. O usuário precisa aprender lendo a resposta.`;
-
-    const parts: any[] = [{ text: prompt }];
-
-    // Add files if they exist
-    files.forEach(file => {
-      parts.push({
-        inlineData: {
-          mimeType: file.mimeType,
-          data: file.data
-        }
-      });
-    });
-
     promises.push(
-      ai.models.generateContent({
-        model: model,
-        contents: { parts },
-        config: {
-          systemInstruction: systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: questionSchema,
-          tools: [{ googleSearch: {} }], // Busca ativa ativada
-          // Reduced thinking budget slightly to avoid timeouts/limits on batch processing
-          thinkingConfig: { thinkingBudget: 1024 }, 
-        },
-      }).then(response => {
-        // Validation check inside the promise to log specific batch success/failure
-        if (!response.text) {
-          console.warn(`Batch ${i} returned empty text.`);
+      (async () => {
+        // --- ATTEMPT 1: WITH GOOGLE SEARCH (Ideal) ---
+        try {
+          let systemInstruction = `
+            Você é um professor particular experiente em concursos da banca 'Instituto JK', preparando um aluno para o cargo de ${role}.
+            
+            SUA MISSÃO:
+            1. Gerar questões que simulem fielmente a banca Instituto JK.
+            2. O gabarito/explicação deve ser EXTREMAMENTE DIDÁTICO.
+            
+            REGRAS PARA A EXPLICAÇÃO:
+            - Matemática: Arme a conta passo a passo.
+            - Legislação: Cite o artigo e dê exemplo prático.
+            - Português: Explique a regra gramatical.
+          `;
+
+          if (isAutomaticMode) {
+            systemInstruction += `\nMODO AUTOMÁTICO: Use a 'googleSearch' para encontrar questões REAIS ou SIMILARES da banca Instituto JK recentes.`;
+          }
+
+          let prompt = `Gere ${batchSize} questões INÉDITAS para ${role} (Banca Instituto JK). Lote ${i + 1}.`;
+          if (extraContext) prompt += `\nContexto: "${extraContext}".`;
+          if (files.length > 0) prompt += `\nBaseie-se nos arquivos anexos.`;
+
+          const parts: any[] = [{ text: prompt }];
+          files.forEach(file => {
+            parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
+          });
+
+          const response = await ai.models.generateContent({
+            model: model,
+            contents: { parts },
+            config: {
+              systemInstruction: systemInstruction,
+              responseMimeType: "application/json",
+              responseSchema: questionSchema,
+              tools: [{ googleSearch: {} }], // Try using search tool
+              thinkingConfig: { thinkingBudget: 1024 },
+            },
+          });
+
+          if (!response.text) throw new Error("Empty response with search");
+          return response;
+
+        } catch (searchError) {
+          console.warn(`Batch ${i} failed with Search (likely API tier limit). Retrying without Search...`, searchError);
+          
+          // --- ATTEMPT 2: FALLBACK WITHOUT SEARCH (Reliable) ---
+          try {
+             let fallbackSystemInstruction = `
+              Você é um professor especialista em concursos.
+              ATENÇÃO: A busca na web falhou. Use seu CONHECIMENTO INTERNO para simular o estilo da banca 'Instituto JK'.
+              Crie questões desafiadoras e realistas para ${role}.
+              Mantenha as explicações EXTREMAMENTE DIDÁTICAS conforme solicitado anteriormente.
+            `;
+
+            let fallbackPrompt = `Gere ${batchSize} questões INÉDITAS para ${role} simulando a banca Instituto JK com seu conhecimento interno.`;
+            if (extraContext) fallbackPrompt += `\nContexto: "${extraContext}".`;
+            
+            // Re-build parts for fallback (include files if present)
+            const fallbackParts: any[] = [{ text: fallbackPrompt }];
+            files.forEach(file => {
+              fallbackParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
+            });
+
+            const fallbackResponse = await ai.models.generateContent({
+              model: model,
+              contents: { parts: fallbackParts },
+              config: {
+                systemInstruction: fallbackSystemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: questionSchema,
+                tools: [], // NO TOOLS - Pure generation
+                thinkingConfig: { thinkingBudget: 1024 },
+              },
+            });
+
+            return fallbackResponse;
+          } catch (fallbackError) {
+            console.error(`Batch ${i} failed completely.`, fallbackError);
+            return null;
+          }
         }
-        return response;
-      }).catch(e => {
-        console.error(`Batch ${i} failed:`, e);
-        return null;
-      })
+      })()
     );
   }
 
@@ -223,7 +224,7 @@ export const analyzePerformanceAndPattern = async (
     ${topicSummary}
 
     1. Identifique os pontos críticos. Onde o aluno vai reprovar se não melhorar?
-    2. Pesquise sobre a banca Instituto JK. Qual o estilo deles? (Texto longo? Pegadinha? Lei seca?). Explique isso no campo 'bancaPattern'.
+    2. Pesquise sobre a banca Instituto JK (se possível) ou use conhecimento geral de bancas similares. Explique isso no campo 'bancaPattern'.
     3. Crie um plano de ação prático no 'recommendations'. Diga exatamente o que estudar.
   `;
 
@@ -239,6 +240,7 @@ export const analyzePerformanceAndPattern = async (
   };
 
   try {
+    // Try with search first for analysis
     const response = await ai.models.generateContent({
       model: model,
       contents: { parts: [{ text: prompt }] },
@@ -249,13 +251,27 @@ export const analyzePerformanceAndPattern = async (
       }
     });
 
-    // Use cleanAndParseJSON here as well for safety
-    if (response.text) {
-      return cleanAndParseJSON(response.text) as StrategicAnalysis;
-    }
-    throw new Error("No analysis returned");
+    if (response.text) return cleanAndParseJSON(response.text) as StrategicAnalysis;
+    throw new Error("Empty analysis response");
+
   } catch (error) {
-    console.error("Error analyzing pattern:", error);
+    console.warn("Analysis search failed, trying fallback...", error);
+    try {
+      // Fallback analysis without search
+       const response = await ai.models.generateContent({
+        model: model,
+        contents: { parts: [{ text: prompt }] },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
+          tools: [] // No tools
+        }
+      });
+      if (response.text) return cleanAndParseJSON(response.text) as StrategicAnalysis;
+    } catch(e) {
+      console.error("Analysis failed completely", e);
+    }
+    
     return {
       strengths: [],
       weaknesses: [],
