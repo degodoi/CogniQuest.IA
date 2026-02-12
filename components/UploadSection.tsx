@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UploadedFile, Role, Question } from '../types';
 import { saveFile, getFiles, deleteFile, getErrorQuestions } from '../services/storageService';
-import { UploadCloud, FileText, Trash2, BookOpen, Database, BrainCircuit, Play } from 'lucide-react';
+import { UploadCloud, FileText, Trash2, BookOpen, Database, BrainCircuit, Play, Flame } from 'lucide-react';
 
 interface UploadSectionProps {
   onStart: (role: Role, files: UploadedFile[], context: string) => void;
@@ -14,10 +14,12 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
   const [storedFiles, setStoredFiles] = useState<UploadedFile[]>([]);
   const [errorQuestions, setErrorQuestions] = useState<Question[]>([]);
   const [context, setContext] = useState('');
+  const [streak, setStreak] = useState(0);
 
-  // Load files and errors from DB on mount
+  // Load files, errors and calculate streak on mount
   useEffect(() => {
     loadData();
+    calculateStreak();
   }, []);
 
   const loadData = async () => {
@@ -29,6 +31,65 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
     } catch (error) {
       console.error("Failed to load data", error);
     }
+  };
+
+  const calculateStreak = () => {
+    const lastStudy = localStorage.getItem('lastStudyDate');
+    const currentStreak = parseInt(localStorage.getItem('studyStreak') || '0', 10);
+    
+    if (lastStudy) {
+      const lastDate = new Date(parseInt(lastStudy));
+      const today = new Date();
+      // Reset hours to compare just dates
+      lastDate.setHours(0,0,0,0);
+      today.setHours(0,0,0,0);
+
+      const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) {
+        // Studied today already
+        setStreak(currentStreak);
+      } else if (diffDays === 1) {
+        // Studied yesterday
+        setStreak(currentStreak);
+      } else {
+        // Streak broken
+        setStreak(0);
+        localStorage.setItem('studyStreak', '0');
+      }
+    } else {
+      setStreak(0);
+    }
+  };
+
+  // Helper to update streak when user starts a quiz
+  const updateStreakOnStart = () => {
+    const lastStudy = localStorage.getItem('lastStudyDate');
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    let newStreak = parseInt(localStorage.getItem('studyStreak') || '0', 10);
+
+    if (lastStudy) {
+      const lastDate = new Date(parseInt(lastStudy));
+      lastDate.setHours(0,0,0,0);
+      const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 1) {
+        newStreak += 1;
+      } else if (diffDays > 1) {
+        newStreak = 1; // Reset and start new
+      }
+      // If diffDays is 0, do nothing (streak stays same for same day)
+    } else {
+      newStreak = 1; // First time ever
+    }
+
+    localStorage.setItem('lastStudyDate', Date.now().toString());
+    localStorage.setItem('studyStreak', newStreak.toString());
+    setStreak(newStreak);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,18 +124,43 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
     loadData();
   };
 
+  const handleStartWrapper = () => {
+    updateStreakOnStart();
+    onStart(role, storedFiles, context);
+  };
+
+  const handleReviewWrapper = () => {
+    updateStreakOnStart();
+    onStartReview(errorQuestions);
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
       
-      {/* Welcome Header */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl shadow-lg mb-6 transform rotate-3 hover:rotate-0 transition-transform duration-300">
-          <BookOpen className="w-10 h-10 text-white" />
-        </div>
-        <h2 className="text-4xl font-extrabold text-gray-800 dark:text-white tracking-tight">Preparatório Instituto JK</h2>
-        <p className="text-lg text-gray-500 dark:text-gray-400 mt-2 max-w-2xl mx-auto">
-          Configure seu simulado ou revise seus erros para garantir a aprovação.
-        </p>
+      {/* Welcome Header with Streak */}
+      <div className="flex flex-col md:flex-row items-center justify-between mb-8">
+         <div className="flex items-center space-x-4 mb-4 md:mb-0">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl shadow-lg transform rotate-3 hover:rotate-0 transition-transform duration-300">
+              <BookOpen className="w-8 h-8 text-white" />
+            </div>
+            <div>
+               <h2 className="text-3xl font-extrabold text-gray-800 dark:text-white tracking-tight">Instituto JK</h2>
+               <p className="text-sm text-gray-500 dark:text-gray-400">Preparatório Vigia & Motorista</p>
+            </div>
+         </div>
+         
+         {/* Streak Badge */}
+         <div className="bg-orange-100 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700/50 px-5 py-3 rounded-2xl flex items-center shadow-sm">
+            <div className={`p-2 rounded-full mr-3 ${streak > 0 ? 'bg-orange-500 text-white animate-pulse' : 'bg-gray-300 dark:bg-gray-700 text-gray-500'}`}>
+              <Flame className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">Ofensiva</p>
+              <p className="text-xl font-bold text-gray-800 dark:text-white">
+                {streak} {streak === 1 ? 'dia' : 'dias'}
+              </p>
+            </div>
+         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -171,7 +257,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
             </div>
 
             <button
-              onClick={() => onStart(role, storedFiles, context)}
+              onClick={handleStartWrapper}
               disabled={isLoading}
               className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition-all transform hover:-translate-y-1 active:translate-y-0 ${
                 isLoading 
@@ -206,7 +292,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
 
             <div className="mt-6 relative z-10">
               <button
-                onClick={() => onStartReview(errorQuestions)}
+                onClick={handleReviewWrapper}
                 disabled={errorQuestions.length === 0 || isLoading}
                 className={`w-full py-3 rounded-xl font-bold text-white shadow-md transition-all transform hover:-translate-y-1 ${
                   errorQuestions.length === 0

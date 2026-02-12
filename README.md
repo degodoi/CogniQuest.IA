@@ -26,29 +26,27 @@ O sistema utiliza Inteligência Artificial avançada (Google Gemini) para atuar 
 *   Utiliza a ferramenta `googleSearch` para buscar padrões reais e recentes da banca na internet.
 *   Adapta o nível de dificuldade e o estilo das perguntas (pegadinhas, tamanho do texto) ao perfil da banca.
 
-### 2. 📚 Explicações Didáticas ("Ensinando do Zero")
+### 2. 🎓 Professor Virtual (Tira-Dúvidas Interativo)
+*   **Chat Inteligente:** Se a explicação automática não for suficiente, você pode clicar em "Não entendi, me ajude!" para conversar com a IA.
+*   **Personalização:** A IA sabe qual questão você errou e qual opção você marcou, fornecendo explicações sob medida para sua dúvida específica.
+
+### 3. 🔥 Consistência de Estudos (Ofensiva)
+*   **Contador de Streak:** O sistema motiva você a estudar todos os dias, exibindo há quantos dias seguidos você está focado.
+*   Acompanhe seu progresso e crie o hábito da aprovação.
+
+### 4. 📚 Explicações Didáticas ("Ensinando do Zero")
 *   Ao responder, o sistema não mostra apenas "Certo" ou "Errado".
 *   **Matemática:** A IA arma a conta e explica o cálculo passo a passo.
 *   **Legislação:** Cita o artigo da lei e dá exemplos práticos do dia a dia.
-*   Foco em ensinar usuários leigos de forma simples e direta.
 
-### 3. 💾 Banco de Conhecimento Pessoal (Persistência)
+### 5. 💾 Banco de Conhecimento Pessoal (Persistência)
 *   Upload de PDFs e arquivos de texto (apostilas, leis, provas antigas).
-*   **IndexedDB:** Os arquivos e o histórico de simulados são salvos no navegador. Você pode fechar a aba e voltar depois sem perder seus dados.
+*   **IndexedDB:** Os arquivos, o histórico de simulados e o **Banco de Erros** são salvos no navegador.
 
-### 4. 📊 Análise de Desempenho e Estratégia
+### 6. 📊 Análise de Desempenho e Estratégia
 *   **Gráficos Visuais:** Acompanhe seus acertos, erros e tempo médio por questão.
-*   **Rastreamento de Tempo de Estudo:** Gráfico de horas acumuladas e duração de cada sessão de estudo para manter a disciplina.
-*   **Evolução Temporal:** Gráfico de linha mostrando seu progresso de nota ao longo dos dias.
-*   **Coach Virtual:** A IA analisa seus erros e gera um relatório textual com:
-    *   Pontos Fortes e Fracos.
-    *   Padrão identificado da Banca.
-    *   Recomendações práticas de estudo.
-
-### 5. 🎨 Interface Moderna
-*   Design responsivo (funciona em Celular e PC).
-*   **Dark Mode** (Modo Escuro) automático ou manual.
-*   Interface limpa e intuitiva.
+*   **Rastreamento de Tempo de Estudo:** Gráfico de horas acumuladas e duração de cada sessão de estudo.
+*   **Coach Virtual:** A IA analisa seus erros e gera um relatório textual com recomendações estratégicas.
 
 ---
 
@@ -85,12 +83,11 @@ Este projeto foi construído com as tecnologias mais modernas do ecossistema Web
     ```
 
 3.  **Configure a API Key:**
-    *   Crie um arquivo `.env` na raiz do projeto (ou configure no seu ambiente de deployment).
+    *   Crie um arquivo `.env` na raiz do projeto.
     *   Adicione sua chave:
     ```env
     API_KEY=sua_chave_do_google_ai_studio_aqui
     ```
-    *   *Nota:* O código está configurado para ler `process.env.API_KEY`. Certifique-se de que seu bundler (Vite, Webpack, Parcel) esteja configurado para expor essa variável ou use a configuração adequada para o seu ambiente.
 
 4.  **Execute o projeto:**
     ```bash
@@ -100,7 +97,7 @@ Este projeto foi construído com as tecnologias mais modernas do ecossistema Web
     ```
 
 5.  **Acesse:**
-    Abra seu navegador em `http://localhost:3000` (ou a porta indicada).
+    Abra seu navegador em `http://localhost:3000`.
 
 ---
 

@@ -198,3 +198,35 @@ export const analyzePerformanceAndPattern = async (
     };
   }
 };
+
+export const getTutorResponse = async (
+  question: Question,
+  userAnswerIndex: number | null,
+  userQuery: string,
+  history: string
+): Promise<string> => {
+  const model = "gemini-3-flash-preview";
+
+  const systemInstruction = `
+    Você é um professor particular paciente e didático.
+    O aluno está com dúvida em uma questão de concurso (Banca Instituto JK).
+    
+    Questão: "${question.text}"
+    Opções: ${JSON.stringify(question.options)}
+    Correta: ${question.options[question.correctIndex]}
+    O aluno marcou: ${userAnswerIndex !== null ? question.options[userAnswerIndex] : "Não respondeu"}
+    
+    Se o aluno perguntar "Por que errei?", explique o erro específico da opção dele.
+    Use linguagem simples, analogias e exemplos práticos. Seja breve e direto.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: model,
+    contents: `Histórico da conversa:\n${history}\n\nAluno: ${userQuery}`,
+    config: {
+      systemInstruction: systemInstruction,
+    },
+  });
+
+  return response.text || "Desculpe, não consegui gerar uma explicação agora.";
+};

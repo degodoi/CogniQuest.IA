@@ -58,3 +58,8 @@ export interface HistoryItem {
   totalTimeSeconds: number; // New field for study duration tracking
   analysis: StrategicAnalysis;
 }
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+}

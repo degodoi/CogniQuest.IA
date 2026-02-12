@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Question, AnswerAttempt } from '../types';
-import { CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Question, AnswerAttempt, ChatMessage } from '../types';
+import { CheckCircle, XCircle, Clock, MessageCircle, Send, X, Bot } from 'lucide-react';
+import { getTutorResponse } from '../services/geminiService';
 
 interface QuizInterfaceProps {
   questions: Question[];
@@ -14,6 +15,13 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
   const [showExplanation, setShowExplanation] = useState(false);
   const [timeSeconds, setTimeSeconds] = useState(0);
   
+  // Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -25,6 +33,11 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [currentIndex]);
+
+  // Scroll to bottom of chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isChatOpen]);
 
   const currentQuestion = questions[currentIndex];
 
@@ -51,15 +64,45 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
       setSelectedOption(null);
       setShowExplanation(false);
       setTimeSeconds(0);
+      // Reset Chat
+      setIsChatOpen(false);
+      setChatMessages([]);
     } else {
       onComplete(answers);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim()) return;
+
+    const userMsg: ChatMessage = { role: 'user', text: chatInput };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setIsChatLoading(true);
+
+    try {
+      // Build simple history string
+      const historyText = chatMessages.map(m => `${m.role === 'user' ? 'Aluno' : 'Professor'}: ${m.text}`).join('\n');
+      
+      const responseText = await getTutorResponse(
+        currentQuestion,
+        selectedOption,
+        userMsg.text,
+        historyText
+      );
+
+      setChatMessages(prev => [...prev, { role: 'model', text: responseText }]);
+    } catch (error) {
+      setChatMessages(prev => [...prev, { role: 'model', text: "Erro ao conectar com o professor. Tente novamente." }]);
+    } finally {
+      setIsChatLoading(false);
     }
   };
 
   const isLastQuestion = currentIndex === questions.length - 1;
 
   return (
-    <div className="max-w-3xl mx-auto w-full">
+    <div className="max-w-3xl mx-auto w-full relative">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-colors duration-300">
         {/* Progress Bar */}
         <div className="w-full bg-gray-200 dark:bg-gray-700 h-2">
@@ -131,16 +174,27 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
           </div>
 
           {showExplanation && (
-            <div className="mt-6 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 animate-fade-in transition-colors">
-              <h3 className="font-bold text-blue-900 dark:text-blue-200 mb-3 flex items-center">
-                 <div className="bg-blue-200 dark:bg-blue-800 rounded-full p-1 mr-2">
-                    <CheckCircle className="w-4 h-4 text-blue-700 dark:text-blue-300" />
-                 </div>
-                 Explicação do Professor:
-              </h3>
-              <p className="text-blue-900 dark:text-blue-100 text-base leading-relaxed whitespace-pre-wrap font-medium">
-                {currentQuestion.explanation}
-              </p>
+            <div className="mt-6 space-y-4 animate-fade-in">
+              <div className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 transition-colors">
+                <h3 className="font-bold text-blue-900 dark:text-blue-200 mb-3 flex items-center">
+                   <div className="bg-blue-200 dark:bg-blue-800 rounded-full p-1 mr-2">
+                      <CheckCircle className="w-4 h-4 text-blue-700 dark:text-blue-300" />
+                   </div>
+                   Explicação do Gabarito:
+                </h3>
+                <p className="text-blue-900 dark:text-blue-100 text-base leading-relaxed whitespace-pre-wrap font-medium">
+                  {currentQuestion.explanation}
+                </p>
+              </div>
+
+              {/* Tutor Button */}
+              <button 
+                onClick={() => setIsChatOpen(true)}
+                className="w-full py-3 bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-lg flex items-center justify-center font-bold transition-colors border border-indigo-200 dark:border-indigo-700"
+              >
+                <MessageCircle className="w-5 h-5 mr-2" />
+                Não entendi, me ajude! (Falar com Professor IA)
+              </button>
             </div>
           )}
         </div>
@@ -168,6 +222,74 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
           )}
         </div>
       </div>
+
+      {/* Tutor Chat Modal */}
+      {isChatOpen && (
+        <div className="absolute inset-0 z-20 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl flex flex-col animate-fade-in">
+          {/* Chat Header */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-t-xl">
+             <div className="flex items-center text-indigo-600 dark:text-indigo-400">
+               <Bot className="w-6 h-6 mr-2" />
+               <h3 className="font-bold">Professor Particular</h3>
+             </div>
+             <button onClick={() => setIsChatOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+               <X className="w-6 h-6" />
+             </button>
+          </div>
+
+          {/* Chat Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            {chatMessages.length === 0 && (
+              <div className="text-center text-gray-400 mt-10">
+                <p className="text-sm">Olá! Sou seu professor particular.</p>
+                <p className="text-xs mt-1">Qual sua dúvida sobre esta questão?</p>
+              </div>
+            )}
+            {chatMessages.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${
+                  msg.role === 'user' 
+                    ? 'bg-blue-600 text-white rounded-br-none' 
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none border border-gray-200 dark:border-gray-600'
+                }`}>
+                  {msg.text}
+                </div>
+              </div>
+            ))}
+            {isChatLoading && (
+              <div className="flex justify-start">
+                 <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl p-3 rounded-bl-none flex space-x-1">
+                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-75"></div>
+                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-150"></div>
+                 </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Chat Input */}
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-xl">
+            <div className="flex space-x-2">
+              <input 
+                type="text" 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                placeholder="Digite sua dúvida..."
+                className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+              />
+              <button 
+                onClick={handleSendMessage}
+                disabled={isChatLoading || !chatInput.trim()}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-2 disabled:opacity-50 transition-colors"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
