@@ -69,6 +69,20 @@ Este projeto foi construído com as tecnologias mais modernas do ecossistema Web
 *   Node.js instalado.
 *   Uma chave de API do Google Gemini (Google AI Studio).
 
+### 🔑 Configuração da API Key (Obrigatório)
+
+Para que a Inteligência Artificial funcione, você precisa configurar sua chave de API:
+
+1.  Crie um arquivo chamado **`.env`** na raiz do projeto (mesma pasta do `package.json`).
+2.  Adicione sua chave neste arquivo da seguinte forma:
+    ```env
+    API_KEY=Sua_Chave_AIzaSy_Aqui
+    ```
+    *(Nota: Se estiver usando Vite e a chave não for reconhecida, tente usar `VITE_API_KEY=...` e ajuste o código se necessário, mas o padrão deste projeto busca por `process.env.API_KEY` via configuração do bundler).*
+
+3.  Salve o arquivo.
+4.  Reinicie o terminal/servidor se ele já estiver rodando.
+
 ### Passo a Passo
 
 1.  **Clone o repositório:**
@@ -82,21 +96,14 @@ Este projeto foi construído com as tecnologias mais modernas do ecossistema Web
     npm install
     ```
 
-3.  **Configure a API Key:**
-    *   Crie um arquivo `.env` na raiz do projeto.
-    *   Adicione sua chave:
-    ```env
-    API_KEY=sua_chave_do_google_ai_studio_aqui
-    ```
-
-4.  **Execute o projeto:**
+3.  **Execute o projeto:**
     ```bash
     npm start
     # ou
     npm run dev
     ```
 
-5.  **Acesse:**
+4.  **Acesse:**
     Abra seu navegador em `http://localhost:3000`.
 
 ---

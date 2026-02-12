@@ -55,8 +55,11 @@ export interface HistoryItem {
   role: Role;
   score: number;
   totalQuestions: number;
-  totalTimeSeconds: number; // New field for study duration tracking
+  totalTimeSeconds: number;
   analysis: StrategicAnalysis;
+  // Added fields to allow full replay/review of history
+  questions?: Question[];
+  answers?: AnswerAttempt[];
 }
 
 export interface ChatMessage {

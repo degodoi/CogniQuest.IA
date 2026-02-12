@@ -88,8 +88,13 @@ export const generateQuestions = async (
           }
 
           let prompt = `Gere ${batchSize} questões INÉDITAS para ${role} (Banca Instituto JK). Lote ${i + 1}.`;
+          
           if (extraContext) prompt += `\nContexto: "${extraContext}".`;
-          if (files.length > 0) prompt += `\nBaseie-se nos arquivos anexos.`;
+          
+          if (files.length > 0) {
+            // Updated prompt to prevent "stuck" behavior on limited PDFs
+            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como referência principal de conteúdo. PORÉM, se os arquivos não cobrirem tópicos suficientes para criar questões variadas, use seu conhecimento interno sobre a banca e o cargo para complementar. Não deixe de gerar questões.`;
+          }
 
           const parts: any[] = [{ text: prompt }];
           files.forEach(file => {
@@ -126,6 +131,10 @@ export const generateQuestions = async (
             let fallbackPrompt = `Gere ${batchSize} questões INÉDITAS para ${role} simulando a banca Instituto JK com seu conhecimento interno.`;
             if (extraContext) fallbackPrompt += `\nContexto: "${extraContext}".`;
             
+            if (files.length > 0) {
+                 fallbackPrompt += `\nCombine o conteúdo dos arquivos anexos com seu conhecimento geral da banca para criar um simulado completo.`;
+            }
+
             // Re-build parts for fallback (include files if present)
             const fallbackParts: any[] = [{ text: fallbackPrompt }];
             files.forEach(file => {

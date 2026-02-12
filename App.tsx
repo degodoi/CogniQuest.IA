@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppView, Question, AnswerAttempt, UploadedFile, Role, StrategicAnalysis } from './types';
+import { AppView, Question, AnswerAttempt, UploadedFile, Role, StrategicAnalysis, HistoryItem } from './types';
 import UploadSection from './components/UploadSection';
 import QuizInterface from './components/QuizInterface';
 import ResultsView from './components/ResultsView';
@@ -41,6 +41,8 @@ const App: React.FC = () => {
       const generatedQuestions = await generateQuestions(selectedRole, files, context);
       if (generatedQuestions.length > 0) {
         setQuestions(generatedQuestions);
+        setAnswers([]); // Clear previous answers
+        setAnalysis(null);
         setView(AppView.QUIZ);
       } else {
         const isAuto = files.length === 0;
@@ -61,7 +63,23 @@ const App: React.FC = () => {
     // Shuffle the questions for better review
     const shuffled = [...errorQuestions].sort(() => Math.random() - 0.5);
     setQuestions(shuffled);
+    setAnswers([]);
+    setAnalysis(null);
     setView(AppView.QUIZ);
+  };
+
+  const handleViewHistory = (item: HistoryItem) => {
+    // Rehydrate state from history item
+    if (item.questions && item.answers) {
+      setQuestions(item.questions);
+      setAnswers(item.answers);
+      setAnalysis(item.analysis);
+      setRole(item.role);
+      setView(AppView.RESULTS);
+    } else {
+      // Legacy handling if old items don't have full data (shouldn't happen for new ones)
+      alert("Este item do histórico é antigo e não contém os detalhes completos das questões, apenas o resumo.");
+    }
   };
 
   const handleQuizComplete = async (completedAnswers: AnswerAttempt[]) => {
@@ -126,6 +144,7 @@ const App: React.FC = () => {
           <UploadSection 
             onStart={handleStartQuiz} 
             onStartReview={handleStartReview}
+            onViewHistory={handleViewHistory}
             isLoading={loading} 
           />
         )}

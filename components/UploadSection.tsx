@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { UploadedFile, Role, Question } from '../types';
-import { saveFile, getFiles, deleteFile, getErrorQuestions } from '../services/storageService';
-import { UploadCloud, FileText, Trash2, BookOpen, Database, BrainCircuit, Play, Flame, Search, Sparkles } from 'lucide-react';
+import { UploadedFile, Role, Question, HistoryItem } from '../types';
+import { saveFile, getFiles, deleteFile, getErrorQuestions, getHistory } from '../services/storageService';
+import { UploadCloud, FileText, Trash2, BookOpen, Database, BrainCircuit, Play, Flame, Search, Sparkles, AlertCircle, History, ArrowRight } from 'lucide-react';
 
 interface UploadSectionProps {
   onStart: (role: Role, files: UploadedFile[], context: string) => void;
   onStartReview: (questions: Question[]) => void;
+  onViewHistory: (item: HistoryItem) => void;
   isLoading: boolean;
 }
 
-const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, isLoading }) => {
+const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, onViewHistory, isLoading }) => {
   const [role, setRole] = useState<Role>(Role.VIGIA);
   const [storedFiles, setStoredFiles] = useState<UploadedFile[]>([]);
   const [errorQuestions, setErrorQuestions] = useState<Question[]>([]);
+  const [recentHistory, setRecentHistory] = useState<HistoryItem[]>([]);
   const [context, setContext] = useState('');
   const [streak, setStreak] = useState(0);
 
@@ -28,6 +30,9 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
       setStoredFiles(files);
       const errors = await getErrorQuestions();
       setErrorQuestions(errors);
+      const hist = await getHistory();
+      // Get last 5, reversed
+      setRecentHistory(hist.reverse().slice(0, 5));
     } catch (error) {
       console.error("Failed to load data", error);
     }
@@ -135,7 +140,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-10">
       
       {/* Welcome Header with Streak */}
       <div className="flex flex-col md:flex-row items-center justify-between mb-8">
@@ -220,7 +225,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
                 <div className="transform group-hover:scale-105 transition-transform duration-300">
                   <UploadCloud className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-2 group-hover:text-blue-500" />
                   <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">Clique ou arraste PDFs aqui</p>
-                  <p className="text-xs text-gray-400 mt-1">Se vazio, a IA usará busca na internet.</p>
+                  <p className="text-xs text-gray-400 mt-1">Aumenta a precisão, mas leva +30s para processar.</p>
                 </div>
               </div>
 
@@ -266,7 +271,15 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
               }`}
             >
               {isLoading ? (
-                <span>Gerando Questões...</span>
+                <div className="flex flex-col items-center">
+                   <div className="flex items-center">
+                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                     <span>Processando...</span>
+                   </div>
+                   {storedFiles.length > 0 && (
+                     <span className="text-xs font-normal mt-1 opacity-90">Lendo PDFs (pode demorar um pouco)</span>
+                   )}
+                </div>
               ) : storedFiles.length === 0 ? (
                 <>
                   <Sparkles className="w-5 h-5 mr-2" />
@@ -280,42 +293,43 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
               )}
             </button>
             
-            {/* Automatic Mode Helper Text */}
-            {storedFiles.length === 0 && !isLoading && (
-              <p className="text-xs text-center text-gray-500 dark:text-gray-400 flex items-center justify-center">
-                <Search className="w-3 h-3 mr-1" />
-                Modo Automático: A IA buscará o perfil da banca na internet.
+            {/* Warnings */}
+            {storedFiles.length > 0 && !isLoading && (
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400 flex items-center justify-center bg-amber-50 dark:bg-amber-900/10 p-2 rounded">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                Dica: O uso de arquivos PDF consome mais recursos. O carregamento pode levar até 1 minuto.
               </p>
             )}
 
           </div>
         </div>
 
-        {/* Right Panel: Smart Review */}
-        <div className="md:col-span-1">
-          <div className="bg-gradient-to-b from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-amber-700/50 p-8 rounded-2xl shadow-xl h-full flex flex-col relative overflow-hidden">
-            {/* Decorative background element */}
+        {/* Right Panel Column */}
+        <div className="space-y-8 md:col-span-1">
+          
+          {/* Smart Review Card */}
+          <div className="bg-gradient-to-b from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-amber-700/50 p-6 rounded-2xl shadow-xl flex flex-col relative overflow-hidden">
             <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-amber-400/20 rounded-full blur-2xl pointer-events-none"></div>
 
             <div className="flex items-center space-x-2 mb-4 relative z-10">
               <BrainCircuit className="w-6 h-6 text-amber-600 dark:text-amber-500" />
-              <h3 className="text-xl font-bold text-gray-800 dark:text-white">Banco de Erros</h3>
+              <h3 className="text-lg font-bold text-gray-800 dark:text-white">Banco de Erros</h3>
             </div>
             
-            <div className="flex-grow flex flex-col justify-center items-center text-center space-y-4 relative z-10">
-              <div className="text-5xl font-extrabold text-amber-600 dark:text-amber-500">
+            <div className="flex-grow flex flex-col justify-center items-center text-center space-y-2 relative z-10 py-4">
+              <div className="text-4xl font-extrabold text-amber-600 dark:text-amber-500">
                 {errorQuestions.length}
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300 font-medium px-4">
-                Questões que você errou e precisa revisar para garantir a aprovação.
+              <p className="text-xs text-gray-600 dark:text-gray-300 font-medium px-2">
+                Questões pendentes de revisão.
               </p>
             </div>
 
-            <div className="mt-6 relative z-10">
+            <div className="mt-2 relative z-10">
               <button
                 onClick={handleReviewWrapper}
                 disabled={errorQuestions.length === 0 || isLoading}
-                className={`w-full py-3 rounded-xl font-bold text-white shadow-md transition-all transform hover:-translate-y-1 ${
+                className={`w-full py-3 rounded-xl font-bold text-white text-sm shadow-md transition-all transform hover:-translate-y-1 ${
                   errorQuestions.length === 0
                     ? 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed text-gray-500'
                     : 'bg-amber-500 hover:bg-amber-600 text-white'
@@ -323,13 +337,43 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, i
               >
                 {errorQuestions.length === 0 ? 'Tudo Limpo!' : 'Revisar Erros Agora'}
               </button>
-              {errorQuestions.length === 0 && (
-                <p className="text-xs text-center text-green-600 dark:text-green-400 mt-3 font-medium">
-                  Parabéns! Você zerou suas pendências.
-                </p>
+            </div>
+          </div>
+
+          {/* Recent History Card */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-6 rounded-2xl shadow-lg flex flex-col relative overflow-hidden">
+            <div className="flex items-center space-x-2 mb-4">
+              <History className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <h3 className="text-lg font-bold text-gray-800 dark:text-white">Histórico Recente</h3>
+            </div>
+
+            <div className="space-y-3">
+              {recentHistory.length === 0 ? (
+                 <p className="text-sm text-gray-400 italic text-center py-4">Nenhum simulado recente.</p>
+              ) : (
+                recentHistory.map((item, idx) => (
+                  <button 
+                    key={idx}
+                    onClick={() => onViewHistory(item)}
+                    className="w-full text-left p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-100 dark:border-gray-600 flex justify-between items-center group"
+                  >
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">{new Date(item.date).toLocaleDateString('pt-BR')}</p>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-white">{item.role}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                        item.score >= 70 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                      }`}>
+                        Nota: {item.score}%
+                      </span>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                  </button>
+                ))
               )}
             </div>
           </div>
+
         </div>
 
       </div>

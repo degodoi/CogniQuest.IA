@@ -60,38 +60,56 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
   // Handle History Saving AND Error Bank Management
   useEffect(() => {
     const processResults = async () => {
-      // 1. Save History (only if analysis exists to prevent duplicates on re-render if logic changes)
-      if (analysis) {
+      // 1. Check if this exact session is already in history to avoid duplicates
+      // We use a simple check based on timestamp or if questions match
+      const currentHistory = await getHistory();
+      
+      // If we are VIEWING a history item (analysis is passed in immediately), we might not want to re-save.
+      // However, current simple logic is: save ONLY if it's a "fresh" run.
+      // We can detect a fresh run if it's not already in the DB with the exact same date/score combination or ID.
+      // Ideally, the App component should tell us if this is "Review Mode". 
+      // For now, let's just attempt to save if the latest history item isn't identical.
+      
+      const isDuplicate = currentHistory.length > 0 && 
+                          currentHistory[currentHistory.length - 1].score === Math.round((correctCount / answers.length) * 100) &&
+                          currentHistory[currentHistory.length - 1].totalQuestions === answers.length &&
+                          Math.abs(currentHistory[currentHistory.length - 1].date - Date.now()) < 5000; // Within 5 seconds
+
+      if (analysis && !isDuplicate) {
         const item = {
           date: Date.now(),
           role,
           score: Math.round((correctCount / answers.length) * 100),
           totalQuestions: answers.length,
           totalTimeSeconds: totalTimeSeconds, 
-          analysis
+          analysis,
+          questions, // SAVE FULL DATA
+          answers    // SAVE FULL DATA
         };
         await saveHistory(item);
+        
+        // Refresh local state
         const h = await getHistory();
         setHistory(h);
-      }
 
-      // 2. Process Error Bank
-      let errorsSaved = 0;
-      for (const answer of answers) {
-        if (!answer.isCorrect) {
-          // Save the full question object to the error bank
-          const question = questions.find(q => q.id === answer.questionId);
-          if (question) {
-            await saveErrorQuestion(question);
-            errorsSaved++;
+        // 2. Process Error Bank ONLY for new runs
+        let errorsSaved = 0;
+        for (const answer of answers) {
+          if (!answer.isCorrect) {
+            const question = questions.find(q => q.id === answer.questionId);
+            if (question) {
+              await saveErrorQuestion(question);
+              errorsSaved++;
+            }
+          } else {
+            await removeErrorQuestion(answer.questionId);
           }
-        } else {
-          // If correct, remove from error bank (if it was there previously)
-          // This creates the "Review until mastered" loop
-          await removeErrorQuestion(answer.questionId);
         }
+        setSavedErrorsCount(errorsSaved);
+      } else {
+        // Just load history for charts
+        setHistory(currentHistory);
       }
-      setSavedErrorsCount(errorsSaved);
     };
 
     processResults();
@@ -139,20 +157,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
               <p className="text-sm text-amber-700 dark:text-amber-300">
                 {savedErrorsCount} questões que você errou foram salvas no <strong>Banco de Erros</strong>. 
                 Use a opção "Revisar Erros" na tela inicial para praticá-las novamente.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {incorrectCount === 0 && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 p-4 rounded-xl flex items-center justify-between">
-          <div className="flex items-center">
-            <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400 mr-3" />
-            <div>
-              <h4 className="font-bold text-green-800 dark:text-green-200">Desempenho Perfeito!</h4>
-              <p className="text-sm text-green-700 dark:text-green-300">
-                Parabéns! Se havia questões dessas no seu Banco de Erros, elas foram removidas.
               </p>
             </div>
           </div>
