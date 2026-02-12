@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { AnswerAttempt, Question, StrategicAnalysis, Role, HistoryItem } from '../types';
-import { saveHistory, getHistory } from '../services/storageService';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line } from 'recharts';
-import { AlertTriangle, Award, BookOpen, Clock, Target, TrendingUp, Layers } from 'lucide-react';
+import { saveHistory, getHistory, saveErrorQuestion, removeErrorQuestion } from '../services/storageService';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, AreaChart, Area } from 'recharts';
+import { AlertTriangle, Award, BookOpen, Clock, Target, TrendingUp, Layers, Hourglass, Calendar, CheckCircle } from 'lucide-react';
 
 interface ResultsViewProps {
   answers: AnswerAttempt[];
@@ -20,11 +20,22 @@ const COLORS = {
 
 const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis, role, onRestart }) => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [savedErrorsCount, setSavedErrorsCount] = useState(0);
 
   const correctCount = answers.filter(a => a.isCorrect).length;
   const incorrectCount = answers.length - correctCount;
-  const totalTime = answers.reduce((acc, curr) => acc + curr.timeSpentSeconds, 0);
-  const avgTime = Math.round(totalTime / answers.length);
+  const totalTimeSeconds = answers.reduce((acc, curr) => acc + curr.timeSpentSeconds, 0);
+  const avgTime = Math.round(totalTimeSeconds / answers.length);
+
+  // Helper to format seconds into readable string (e.g. 1h 30m)
+  const formatDuration = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  };
 
   // Process data for Topic Performance Chart
   const topicData = React.useMemo(() => {
@@ -46,24 +57,45 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
     })).sort((a, b) => b.percentage - a.percentage); // Sort best performing first
   }, [questions, answers]);
 
-  // Save history
+  // Handle History Saving AND Error Bank Management
   useEffect(() => {
-    if (analysis) {
-      const saveAndLoadHistory = async () => {
+    const processResults = async () => {
+      // 1. Save History (only if analysis exists to prevent duplicates on re-render if logic changes)
+      if (analysis) {
         const item = {
           date: Date.now(),
           role,
           score: Math.round((correctCount / answers.length) * 100),
           totalQuestions: answers.length,
+          totalTimeSeconds: totalTimeSeconds, 
           analysis
         };
         await saveHistory(item);
         const h = await getHistory();
         setHistory(h);
-      };
-      saveAndLoadHistory();
-    }
-  }, [analysis, correctCount, answers.length, role]);
+      }
+
+      // 2. Process Error Bank
+      let errorsSaved = 0;
+      for (const answer of answers) {
+        if (!answer.isCorrect) {
+          // Save the full question object to the error bank
+          const question = questions.find(q => q.id === answer.questionId);
+          if (question) {
+            await saveErrorQuestion(question);
+            errorsSaved++;
+          }
+        } else {
+          // If correct, remove from error bank (if it was there previously)
+          // This creates the "Review until mastered" loop
+          await removeErrorQuestion(answer.questionId);
+        }
+      }
+      setSavedErrorsCount(errorsSaved);
+    };
+
+    processResults();
+  }, [analysis, correctCount, answers, questions, role, totalTimeSeconds]);
 
   const pieData = [
     { name: 'Corretas', value: correctCount },
@@ -72,8 +104,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
 
   const historyData = history.map(h => ({
     date: new Date(h.date).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'}),
-    nota: h.score
+    nota: h.score,
+    minutos: Math.round((h.totalTimeSeconds || 0) / 60)
   }));
+
+  const totalLifetimeSeconds = history.reduce((acc, curr) => acc + (curr.totalTimeSeconds || 0), 0);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -82,7 +117,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
           <p className="font-bold text-gray-700 dark:text-gray-200">{label}</p>
           {payload.map((p: any, idx: number) => (
              <p key={idx} style={{ color: p.color }} className="text-sm">
-                {p.name}: {p.value}
+                {p.name}: {p.value} {p.unit || ''}
              </p>
           ))}
         </div>
@@ -94,6 +129,36 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
   return (
     <div className="w-full max-w-7xl mx-auto space-y-8 animate-fade-in-up pb-12">
       
+      {/* Feedback Banner about Errors */}
+      {savedErrorsCount > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 rounded-xl flex items-center justify-between">
+          <div className="flex items-center">
+            <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400 mr-3" />
+            <div>
+              <h4 className="font-bold text-amber-800 dark:text-amber-200">Atenção aos Detalhes</h4>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                {savedErrorsCount} questões que você errou foram salvas no <strong>Banco de Erros</strong>. 
+                Use a opção "Revisar Erros" na tela inicial para praticá-las novamente.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {incorrectCount === 0 && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 p-4 rounded-xl flex items-center justify-between">
+          <div className="flex items-center">
+            <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400 mr-3" />
+            <div>
+              <h4 className="font-bold text-green-800 dark:text-green-200">Desempenho Perfeito!</h4>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                Parabéns! Se havia questões dessas no seu Banco de Erros, elas foram removidas.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Key Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Score Card */}
@@ -121,11 +186,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
         {/* Time Card */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
            <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-          <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Tempo Médio</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Tempo do Simulado</p>
           <div className="flex items-end space-x-2">
-            <h3 className="text-4xl font-extrabold text-gray-800 dark:text-white">{avgTime}s</h3>
-            <span className="text-sm text-gray-400 mb-1">por questão</span>
+            <h3 className="text-4xl font-extrabold text-gray-800 dark:text-white">{formatDuration(totalTimeSeconds)}</h3>
           </div>
+          <p className="text-xs text-gray-400 mt-1">Média: {avgTime}s / questão</p>
           <Clock className="absolute right-6 top-6 w-8 h-8 text-purple-500 opacity-50" />
         </div>
 
@@ -133,7 +198,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
         <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-2xl shadow-lg flex flex-col justify-center items-center text-center">
              <h4 className="text-white font-bold mb-3 text-sm">Pronto para o próximo?</h4>
              <button onClick={onRestart} className="w-full bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-4 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5">
-                Novo Simulado
+                Voltar ao Início
              </button>
         </div>
       </div>
@@ -208,30 +273,87 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
              </div>
           </div>
 
-          {/* Evolution Chart (Full Width in Col) */}
-          {history.length > 1 && (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-6 flex items-center">
-                <TrendingUp className="w-5 h-5 mr-2 text-blue-500" />
-                Sua Evolução ao Longo do Tempo
-              </h3>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={historyData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} vertical={false} />
-                    <XAxis dataKey="date" stroke="#9CA3AF" tickLine={false} axisLine={false} dy={10} />
-                    <YAxis domain={[0, 100]} stroke="#9CA3AF" tickLine={false} axisLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line 
-                      type="monotone" 
-                      dataKey="nota" 
-                      stroke="#8b5cf6" 
-                      strokeWidth={4} 
-                      dot={{r: 4, fill: '#8b5cf6', strokeWidth: 2, stroke: '#fff'}} 
-                      activeDot={{r: 8}} 
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+          {/* History & Study Time Section */}
+          {history.length > 0 && (
+            <div className="space-y-6">
+              
+              {/* Lifetime Stats Banner */}
+              <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold opacity-90">Total de Horas Estudadas</h3>
+                  <p className="text-sm opacity-75">Somando todos os simulados realizados</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-4xl font-bold flex items-center gap-2">
+                    <Hourglass className="w-8 h-8 opacity-80" />
+                    {formatDuration(totalLifetimeSeconds)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                {/* Evolution Line Chart */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-6 flex items-center">
+                    <TrendingUp className="w-5 h-5 mr-2 text-blue-500" />
+                    Evolução da Nota
+                  </h3>
+                  <div className="h-60 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={historyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} vertical={false} />
+                        <XAxis dataKey="date" stroke="#9CA3AF" tick={{fontSize: 10}} tickLine={false} axisLine={false} dy={10} />
+                        <YAxis domain={[0, 100]} stroke="#9CA3AF" tickLine={false} axisLine={false} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Line 
+                          type="monotone" 
+                          dataKey="nota" 
+                          name="Nota (%)"
+                          stroke="#3B82F6" 
+                          strokeWidth={3} 
+                          dot={{r: 4, fill: '#3B82F6', strokeWidth: 2, stroke: '#fff'}} 
+                          activeDot={{r: 6}} 
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Study Time Area Chart */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-6 flex items-center">
+                    <Calendar className="w-5 h-5 mr-2 text-purple-500" />
+                    Tempo por Sessão (min)
+                  </h3>
+                  <div className="h-60 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={historyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorTime" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} vertical={false} />
+                        <XAxis dataKey="date" stroke="#9CA3AF" tick={{fontSize: 10}} tickLine={false} axisLine={false} dy={10} />
+                        <YAxis stroke="#9CA3AF" tickLine={false} axisLine={false} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area 
+                          type="monotone" 
+                          dataKey="minutos" 
+                          name="Minutos"
+                          unit="min"
+                          stroke="#8B5CF6" 
+                          fillOpacity={1} 
+                          fill="url(#colorTime)" 
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              
               </div>
             </div>
           )}

@@ -38,7 +38,8 @@ O sistema utiliza Inteligência Artificial avançada (Google Gemini) para atuar 
 
 ### 4. 📊 Análise de Desempenho e Estratégia
 *   **Gráficos Visuais:** Acompanhe seus acertos, erros e tempo médio por questão.
-*   **Evolução Temporal:** Gráfico de linha mostrando seu progresso ao longo dos dias.
+*   **Rastreamento de Tempo de Estudo:** Gráfico de horas acumuladas e duração de cada sessão de estudo para manter a disciplina.
+*   **Evolução Temporal:** Gráfico de linha mostrando seu progresso de nota ao longo dos dias.
 *   **Coach Virtual:** A IA analisa seus erros e gera um relatório textual com:
     *   Pontos Fortes e Fracos.
     *   Padrão identificado da Banca.

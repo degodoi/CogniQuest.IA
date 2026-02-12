@@ -1,3 +1,4 @@
+
 export enum Role {
   VIGIA = 'Vigia',
   MOTORISTA = 'Motorista Categoria D',
@@ -54,5 +55,6 @@ export interface HistoryItem {
   role: Role;
   score: number;
   totalQuestions: number;
+  totalTimeSeconds: number; // New field for study duration tracking
   analysis: StrategicAnalysis;
 }

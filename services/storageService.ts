@@ -1,9 +1,10 @@
-import { UploadedFile, HistoryItem } from '../types';
+import { UploadedFile, HistoryItem, Question } from '../types';
 
 const DB_NAME = 'AprovaJK_DB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incremented version
 const STORE_FILES = 'files';
 const STORE_HISTORY = 'history';
+const STORE_ERRORS = 'errors'; // New store for wrong questions
 
 // Helper to open DB
 const openDB = (): Promise<IDBDatabase> => {
@@ -17,6 +18,9 @@ const openDB = (): Promise<IDBDatabase> => {
       }
       if (!db.objectStoreNames.contains(STORE_HISTORY)) {
         db.createObjectStore(STORE_HISTORY, { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains(STORE_ERRORS)) {
+        db.createObjectStore(STORE_ERRORS, { keyPath: 'id' });
       }
     };
 
@@ -88,6 +92,45 @@ export const getHistory = async (): Promise<HistoryItem[]> => {
     const request = store.getAll();
 
     request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+// --- ERROR BANK FUNCTIONS ---
+
+export const saveErrorQuestion = async (question: Question): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_ERRORS, 'readwrite');
+    const store = transaction.objectStore(STORE_ERRORS);
+    // Use put to avoid duplicates if the same question ID exists (update it)
+    const request = store.put(question); 
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const getErrorQuestions = async (): Promise<Question[]> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_ERRORS, 'readonly');
+    const store = transaction.objectStore(STORE_ERRORS);
+    const request = store.getAll();
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const removeErrorQuestion = async (id: string): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_ERRORS, 'readwrite');
+    const store = transaction.objectStore(STORE_ERRORS);
+    const request = store.delete(id);
+
+    request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
 };

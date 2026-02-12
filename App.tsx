@@ -53,6 +53,13 @@ const App: React.FC = () => {
     }
   };
 
+  const handleStartReview = (errorQuestions: Question[]) => {
+    // Shuffle the questions for better review
+    const shuffled = [...errorQuestions].sort(() => Math.random() - 0.5);
+    setQuestions(shuffled);
+    setView(AppView.QUIZ);
+  };
+
   const handleQuizComplete = async (completedAnswers: AnswerAttempt[]) => {
     setAnswers(completedAnswers);
     setView(AppView.RESULTS);
@@ -112,7 +119,11 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="flex-grow p-4 md:p-8">
         {view === AppView.HOME && (
-          <UploadSection onStart={handleStartQuiz} isLoading={loading} />
+          <UploadSection 
+            onStart={handleStartQuiz} 
+            onStartReview={handleStartReview}
+            isLoading={loading} 
+          />
         )}
 
         {view === AppView.QUIZ && (
