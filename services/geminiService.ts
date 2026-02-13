@@ -86,6 +86,19 @@ export const generateQuestions = async (
       ? totalQuestions % batchSize 
       : batchSize;
 
+    // Explicitly calculate distribution for this batch to ensure variety
+    // Target: 30% Portuguese, 20% Math/Logic, 50% Specific
+    const countPT = Math.max(1, Math.floor(questionsInBatch * 0.3));
+    const countMat = Math.max(1, Math.floor(questionsInBatch * 0.2));
+    // Ensure the remainder goes to Specifics so the sum equals questionsInBatch
+    const countSpec = questionsInBatch - countPT - countMat;
+
+    const distributionString = `
+      - ${countPT} questões de Língua Portuguesa
+      - ${countMat} questões de Matemática ou Raciocínio Lógico
+      - ${countSpec} questões de Conhecimentos Específicos do Cargo/Legislação
+    `;
+
     promises.push(
       (async () => {
         try {
@@ -95,9 +108,8 @@ export const generateQuestions = async (
             
             SUA MISSÃO:
             1. Gerar exatamente ${questionsInBatch} questões para este lote.
-            2. REGRA DE OURO: Você DEVE misturar as matérias NESTE lote de ${questionsInBatch} questões. 
-               - Distribuição Ideal: 30% Língua Portuguesa, 20% Matemática/Raciocínio Lógico, 50% Conhecimentos Específicos do Cargo.
-               - NÃO gere questões de apenas um assunto. O usuário precisa de um mix.
+            2. OBRIGATÓRIO SEGUIR ESTA DISTRIBUIÇÃO:
+               ${distributionString}
             3. Estilo: Imite o estilo da banca '${profile.banca}' (tamanho do texto, pegadinhas).
             4. Explicação: Didática e completa.
           `;
@@ -106,13 +118,12 @@ export const generateQuestions = async (
             systemInstruction += `\nMODO AUTOMÁTICO: Tente ser fiel ao conteúdo programático real.`;
           }
 
-          let prompt = `Gere um lote de ${questionsInBatch} questões variadas (Português, Matemática e Específicas) para ${profile.cargo} - Banca ${profile.banca}.`;
-          prompt += `\nIMPORTANTE: Garanta a proporção de matérias solicitada na instrução. O aluno precisa testar todos os conhecimentos agora.`;
+          let prompt = `Gere ${questionsInBatch} questões seguindo estritamente a distribuição: ${countPT} Port, ${countMat} Mat, ${countSpec} Específicas. Cargo: ${profile.cargo} - Banca ${profile.banca}.`;
           
           if (extraContext) prompt += `\nFoco/Pedido do Usuário: "${extraContext}".`;
           
           if (files.length > 0) {
-            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como base. Se os arquivos forem limitados (ex: só tem lei), use seu conhecimento da banca para criar as questões de Português e Matemática que faltam para completar o mix.`;
+            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como base. Se os arquivos forem limitados (ex: só tem lei), use seu conhecimento da banca para criar as questões de Português e Matemática que faltam para completar o mix solicitado.`;
           }
 
           const parts: any[] = [{ text: prompt }];
@@ -154,11 +165,12 @@ export const generateQuestions = async (
             let fallbackInstruction = `
               Você é um especialista na banca ${profile.banca}.
               Crie uma prova para ${profile.cargo} (${profile.escolaridade}).
-              Gere ${questionsInBatch} questões MISTURANDO: Português, Matemática e Conhecimentos Específicos.
+              Gere EXATAMENTE:
+              ${distributionString}
               Retorne APENAS JSON.
             `;
             
-            let fallbackPrompt = `Gere ${questionsInBatch} questões variadas para ${profile.cargo}.`;
+            let fallbackPrompt = `Gere ${questionsInBatch} questões: ${countPT} Port, ${countMat} Mat, ${countSpec} Específicas para ${profile.cargo}.`;
 
              const fallbackParts: any[] = [{ text: fallbackPrompt }];
              files.forEach(file => {
