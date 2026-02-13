@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UploadedFile, ExamProfile, Question, HistoryItem, StrategicAnalysis } from '../types';
 import { saveFile, getFiles, deleteFile, getErrorQuestions, getHistory } from '../services/storageService';
-import { UploadCloud, FileText, Trash2, BookOpen, BrainCircuit, Play, Flame, History, Building2, Briefcase, GraduationCap, Trophy, Target, Clock, TrendingUp, Lightbulb, ListOrdered } from 'lucide-react';
+import { UploadCloud, FileText, Trash2, BookOpen, BrainCircuit, Play, Flame, History, Building2, Briefcase, GraduationCap, Trophy, Target, Clock, TrendingUp, Lightbulb, ListOrdered, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 
 interface UploadSectionProps {
@@ -9,6 +9,7 @@ interface UploadSectionProps {
   onStartReview: (questions: Question[]) => void;
   onViewHistory: (item: HistoryItem) => void;
   isLoading: boolean;
+  onError: (msg: string) => void;
 }
 
 const COLORS = {
@@ -17,19 +18,24 @@ const COLORS = {
   low: '#EF4444',  // Red
 };
 
-const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, onViewHistory, isLoading }) => {
+const MAX_FILE_SIZE_MB = 4;
+
+const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, onViewHistory, isLoading, onError }) => {
   // State for Dynamic Inputs
   const [banca, setBanca] = useState('');
   const [cargo, setCargo] = useState('');
   const [escolaridade, setEscolaridade] = useState<'Fundamental' | 'Médio' | 'Superior'>('Médio');
-  const [qCount, setQCount] = useState<10 | 20 | 30 | 40>(10); // Default to 10 for quick start
+  const [qCount, setQCount] = useState<10 | 20 | 30 | 40>(10); 
 
   const [storedFiles, setStoredFiles] = useState<UploadedFile[]>([]);
   const [errorQuestions, setErrorQuestions] = useState<Question[]>([]);
   const [recentHistory, setRecentHistory] = useState<HistoryItem[]>([]);
-  const [allHistory, setAllHistory] = useState<HistoryItem[]>([]); // For stats
+  const [allHistory, setAllHistory] = useState<HistoryItem[]>([]); 
   const [context, setContext] = useState('');
   const [streak, setStreak] = useState(0);
+
+  // Validation States
+  const [showValidation, setShowValidation] = useState(false);
 
   // Load everything on mount
   useEffect(() => {
@@ -127,20 +133,37 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
     if (e.target.files) {
       for (let i = 0; i < e.target.files.length; i++) {
         const file = e.target.files[i];
+        
+        // 1. Check Size
+        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+          onError(`O arquivo "${file.name}" é muito grande (Máx: ${MAX_FILE_SIZE_MB}MB).`);
+          continue;
+        }
+
+        // 2. Check Type
         if (file.type === 'application/pdf' || file.type === 'text/plain') {
-          const reader = new FileReader();
-          const filePromise = new Promise<UploadedFile>((resolve) => {
-            reader.onload = (event) => {
-              const base64 = (event.target?.result as string).split(',')[1];
-              resolve({ name: file.name, mimeType: file.type, data: base64 });
-            };
-          });
-          const pFile = await filePromise;
-          await saveFile(pFile);
+          try {
+            const reader = new FileReader();
+            const filePromise = new Promise<UploadedFile>((resolve, reject) => {
+              reader.onload = (event) => {
+                const base64 = (event.target?.result as string).split(',')[1];
+                resolve({ name: file.name, mimeType: file.type, data: base64 });
+              };
+              reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
+            });
+            const pFile = await filePromise;
+            await saveFile(pFile);
+          } catch (err) {
+             onError(`Erro ao processar "${file.name}".`);
+          }
+        } else {
+          onError(`Formato inválido para "${file.name}". Use PDF ou TXT.`);
         }
       }
       loadData();
     }
+    // Reset input
+    e.target.value = '';
   };
 
   const handleRemoveFile = async (id: string) => {
@@ -151,10 +174,12 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
 
   const handleStartWrapper = () => {
     if (!banca.trim() || !cargo.trim()) {
-      alert("Por favor, preencha a Banca e o Cargo para iniciar.");
+      setShowValidation(true);
+      onError("Por favor, preencha a Banca e o Cargo para iniciar.");
       return;
     }
-    savePreferences(); // Auto-save
+    setShowValidation(false);
+    savePreferences(); 
     updateStreakOnStart();
     const profile: ExamProfile = { banca, cargo, escolaridade, qCount };
     onStart(profile, storedFiles, context);
@@ -165,7 +190,6 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
     onStartReview(errorQuestions);
   };
 
-  // --- DASHBOARD CALCULATIONS ---
   const stats = useMemo(() => {
     if (allHistory.length === 0) return null;
 
@@ -177,11 +201,9 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
     allHistory.forEach(h => {
       totalSeconds += h.totalTimeSeconds || 0;
       totalQuestionsAnswered += h.totalQuestions || 0;
-      // Estimate correct based on score if answers not present (legacy) or calculate exactly
       const correctInSession = Math.round((h.score / 100) * h.totalQuestions);
       totalCorrect += correctInSession;
 
-      // Aggregating topics
       if (h.questions && h.answers) {
         h.questions.forEach(q => {
           const t = q.topic || 'Geral';
@@ -193,16 +215,14 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
       }
     });
 
-    // Calculate Weaknesses and Strengths based on data
     const topicPerformance = Object.entries(topicStats).map(([topic, data]) => ({
       topic,
       percentage: Math.round((data.correct / data.total) * 100),
       total: data.total
-    })).sort((a, b) => a.percentage - b.percentage); // Lowest first
+    })).sort((a, b) => a.percentage - b.percentage);
 
     const globalScore = totalQuestionsAnswered > 0 ? Math.round((totalCorrect / totalQuestionsAnswered) * 100) : 0;
     
-    // Get latest recommendations
     const lastSession = allHistory[allHistory.length - 1];
     const latestPlan = lastSession?.analysis?.recommendations || "Realize um simulado para gerar seu plano.";
 
@@ -211,7 +231,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
       totalMinutes: Math.floor((totalSeconds % 3600) / 60),
       globalScore,
       questionsCount: totalQuestionsAnswered,
-      topicPerformance, // Full list for chart
+      topicPerformance,
       latestPlan
     };
   }, [allHistory]);
@@ -246,7 +266,6 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-fade-in-up">
           
-          {/* Stats Cards */}
           <div className="md:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center">
               <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl mr-4 text-blue-600 dark:text-blue-400">
@@ -281,7 +300,6 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
             </div>
           </div>
 
-          {/* Charts & Plans */}
           <div className="md:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center">
                <TrendingUp className="w-5 h-5 mr-2 text-indigo-500" />
@@ -345,28 +363,30 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
             {/* Input Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
-                  <Building2 className="w-4 h-4 mr-1 text-indigo-500" /> Banca Organizadora
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                  <span className="flex items-center"><Building2 className="w-4 h-4 mr-1 text-indigo-500" /> Banca Organizadora</span>
+                  {showValidation && !banca && <span className="text-red-500 text-xs font-bold">Obrigatório</span>}
                 </label>
                 <input 
                   type="text" 
                   value={banca}
                   onChange={(e) => setBanca(e.target.value)}
                   placeholder="Ex: Cebraspe, Vunesp, FGV..."
-                  className="w-full p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-semibold"
+                  className={`w-full p-3 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-semibold ${showValidation && !banca ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600'}`}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
-                  <Briefcase className="w-4 h-4 mr-1 text-indigo-500" /> Cargo Pretendido
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                  <span className="flex items-center"><Briefcase className="w-4 h-4 mr-1 text-indigo-500" /> Cargo Pretendido</span>
+                  {showValidation && !cargo && <span className="text-red-500 text-xs font-bold">Obrigatório</span>}
                 </label>
                 <input 
                   type="text" 
                   value={cargo}
                   onChange={(e) => setCargo(e.target.value)}
                   placeholder="Ex: Policial, Técnico Adm..."
-                  className="w-full p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-semibold"
+                  className={`w-full p-3 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-semibold ${showValidation && !cargo ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600'}`}
                 />
               </div>
 
@@ -418,7 +438,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
             <div className="relative pt-4 border-t border-gray-100 dark:border-gray-700">
               <label className="flex justify-between items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 <span>Material de Apoio (PDFs)</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full">Opcional</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full">Máx 4MB por arquivo</span>
               </label>
               
               <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 text-center hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors relative mb-4 group cursor-pointer">
@@ -485,6 +505,13 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
                   "Iniciar Simulado Agora"
               )}
             </button>
+            
+            {showValidation && (!banca || !cargo) && (
+              <p className="text-xs text-red-500 text-center flex items-center justify-center font-semibold animate-pulse">
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                Preencha os campos obrigatórios acima.
+              </p>
+            )}
           </div>
         </div>
 

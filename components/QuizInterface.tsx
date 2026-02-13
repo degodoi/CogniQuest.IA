@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Question, AnswerAttempt, ChatMessage } from '../types';
-import { CheckCircle, XCircle, Clock, MessageCircle, Send, X, Bot } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, MessageCircle, Send, X, Bot, RefreshCw } from 'lucide-react';
 import { getTutorResponse } from '../services/geminiService';
 
 interface QuizInterfaceProps {
@@ -20,9 +20,24 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatError, setChatError] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const timerRef = useRef<number | null>(null);
+
+  // Prevent accidental close
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (answers.length < questions.length) {
+        e.preventDefault();
+        e.returnValue = ''; // Legacy standard
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [answers.length, questions.length]);
 
   useEffect(() => {
     timerRef.current = window.setInterval(() => {
@@ -67,6 +82,7 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
       // Reset Chat
       setIsChatOpen(false);
       setChatMessages([]);
+      setChatError(false);
     } else {
       onComplete(answers);
     }
@@ -79,6 +95,7 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
     setChatMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatLoading(true);
+    setChatError(false);
 
     try {
       // Build simple history string
@@ -93,7 +110,8 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
 
       setChatMessages(prev => [...prev, { role: 'model', text: responseText }]);
     } catch (error) {
-      setChatMessages(prev => [...prev, { role: 'model', text: "Erro ao conectar com o professor. Tente novamente." }]);
+      setChatMessages(prev => [...prev, { role: 'model', text: "Erro ao conectar com o professor. Verifique sua conexão." }]);
+      setChatError(true);
     } finally {
       setIsChatLoading(false);
     }
@@ -264,6 +282,13 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-150"></div>
                  </div>
               </div>
+            )}
+            {chatError && !isChatLoading && (
+               <div className="text-center">
+                 <button onClick={handleSendMessage} className="text-xs text-red-500 flex items-center justify-center mx-auto hover:underline">
+                    <RefreshCw className="w-3 h-3 mr-1" /> Tentar novamente
+                 </button>
+               </div>
             )}
             <div ref={chatEndRef} />
           </div>

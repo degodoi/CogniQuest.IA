@@ -1,16 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppView, Question, AnswerAttempt, UploadedFile, ExamProfile, StrategicAnalysis, HistoryItem } from './types';
 import UploadSection from './components/UploadSection';
 import QuizInterface from './components/QuizInterface';
 import ResultsView from './components/ResultsView';
 import { generateQuestions, analyzePerformanceAndPattern } from './services/geminiService';
-import { GraduationCap, Moon, Sun } from 'lucide-react';
+import { GraduationCap, Moon, Sun, X, CheckCircle, AlertCircle, Info } from 'lucide-react';
+
+// --- TOAST COMPONENT ---
+interface Toast {
+  id: number;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.HOME);
   const [loading, setLoading] = useState(false);
   
-  // profile state replaces role
+  // Toast State
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  }, []);
+
+  const removeToast = (id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  // profile state
   const [profile, setProfile] = useState<ExamProfile>({
     banca: '',
     cargo: '',
@@ -51,13 +73,13 @@ const App: React.FC = () => {
         setAnswers([]); 
         setAnalysis(null);
         setView(AppView.QUIZ);
+        addToast("Simulado gerado com sucesso! Boa prova.", "success");
       } else {
-        alert("A IA não conseguiu gerar questões para este perfil. Tente reformular a Banca ou Cargo.");
+        addToast("A IA não conseguiu gerar questões. Tente mudar o tema.", "error");
       }
     } catch (error: any) {
       console.error("Erro na App.tsx:", error);
-      // Show the specific error message to the user
-      alert(`Erro: ${error.message || "Erro desconhecido ao conectar com a IA."}`);
+      addToast(error.message || "Erro desconhecido ao conectar com a IA.", "error");
     } finally {
       setLoading(false);
     }
@@ -69,6 +91,7 @@ const App: React.FC = () => {
     setAnswers([]);
     setAnalysis(null);
     setView(AppView.QUIZ);
+    addToast("Modo Revisão iniciado! Foco nos erros.", "info");
   };
 
   const handleViewHistory = (item: HistoryItem) => {
@@ -81,20 +104,30 @@ const App: React.FC = () => {
       }
       setView(AppView.RESULTS);
     } else {
-      alert("Item de histórico inválido ou antigo.");
+      addToast("Este item do histórico está incompleto.", "error");
     }
   };
 
   const handleQuizComplete = async (completedAnswers: AnswerAttempt[]) => {
     setAnswers(completedAnswers);
     setView(AppView.RESULTS);
+    addToast("Simulado finalizado! Analisando desempenho...", "success");
     
     analyzePerformanceAndPattern(profile, completedAnswers, questions).then(result => {
       setAnalysis(result);
+    }).catch(err => {
+      console.error(err);
+      addToast("Não foi possível gerar a análise detalhada no momento.", "error");
     });
   };
 
   const handleRestart = () => {
+    // If currently in quiz, confirm exit is handled by QuizInterface, but purely for navigation:
+    if (view === AppView.QUIZ && answers.length < questions.length) {
+      if (!window.confirm("Sair agora perderá o progresso do simulado atual. Continuar?")) {
+        return;
+      }
+    }
     setQuestions([]);
     setAnswers([]);
     setAnalysis(null);
@@ -104,6 +137,29 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col font-sans text-gray-800 dark:text-gray-100 transition-colors duration-300">
       
+      {/* Toast Container */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+        {toasts.map(toast => (
+          <div 
+            key={toast.id} 
+            className={`pointer-events-auto flex items-center p-4 rounded-lg shadow-lg text-white transform transition-all animate-fade-in-up max-w-sm ${
+              toast.type === 'success' ? 'bg-green-600' : 
+              toast.type === 'error' ? 'bg-red-600' : 'bg-blue-600'
+            }`}
+          >
+            <div className="mr-3">
+              {toast.type === 'success' && <CheckCircle className="w-5 h-5" />}
+              {toast.type === 'error' && <AlertCircle className="w-5 h-5" />}
+              {toast.type === 'info' && <Info className="w-5 h-5" />}
+            </div>
+            <p className="text-sm font-medium flex-1">{toast.message}</p>
+            <button onClick={() => removeToast(toast.id)} className="ml-3 hover:text-gray-200">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -145,7 +201,8 @@ const App: React.FC = () => {
             onStart={handleStartQuiz} 
             onStartReview={handleStartReview}
             onViewHistory={handleViewHistory}
-            isLoading={loading} 
+            isLoading={loading}
+            onError={(msg) => addToast(msg, 'error')}
           />
         )}
 
