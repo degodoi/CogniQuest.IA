@@ -1,6 +1,6 @@
-# CogniQuest.IA 🧠
+# CogniQuest 🧠
 
-> **Sistema Inteligente de Preparação para Concursos (Vigia & Motorista)**
+> **Sistema Avançado de Preparação para Concursos**
 
 Desenvolvido por **Marcos Felipe**.
 
@@ -8,87 +8,82 @@ Desenvolvido por **Marcos Felipe**.
 
 ## 📋 Sobre o Projeto
 
-O **CogniQuest.IA** é uma aplicação web de alto desempenho projetada para auxiliar candidatos na preparação para concursos públicos, especificamente focado na banca **Instituto JK** (Instituto Social da Cidadania Juscelino Kubitschek).
-
-O sistema utiliza Inteligência Artificial avançada (Google Gemini) para atuar como um "Professor Particular" e "Coach", gerando simulados personalizados, corrigindo questões de forma didática e analisando estrategicamente o desempenho do candidato.
+O **CogniQuest** é uma plataforma web de alto desempenho projetada para auxiliar candidatos na preparação para concursos públicos. O sistema atua como um "Professor Particular" e "Coach" virtual, criando simulados personalizados, corrigindo questões de forma didática e analisando estrategicamente o seu desempenho para otimizar seus estudos.
 
 ### 🎯 Foco do Estudo
-*   **Cargos:** Vigia e Motorista Categoria D.
-*   **Banca:** Instituto JK.
-*   **Matérias:** Português, Matemática, Conhecimentos Gerais, Legislação de Trânsito (CTB), Direção Defensiva, Mecânica Básica e Segurança Patrimonial.
+*   **Cargos:** Vigia, Motorista Categoria D, Assistente Administrativo, entre outros.
+*   **Bancas:** Instituto JK, Cebraspe, Vunesp, FGV, etc.
+*   **Matérias:** Português, Matemática, Conhecimentos Gerais, Legislação de Trânsito (CTB), Direção Defensiva, Mecânica Básica, Segurança Patrimonial e muito mais.
 
 ---
 
 ## ✨ Funcionalidades Principais
 
-### 1. 🤖 Geração de Simulados via IA
-*   O sistema gera **40 questões inéditas** a cada rodada.
-*   Utiliza a ferramenta `googleSearch` para buscar padrões reais e recentes da banca na internet.
-*   Adapta o nível de dificuldade e o estilo das perguntas (pegadinhas, tamanho do texto) ao perfil da banca.
+### 1. 📝 Geração de Simulados Personalizados
+*   O sistema cria questões inéditas focadas no seu cargo e na banca escolhida.
+*   Adapta o nível de dificuldade e o estilo das perguntas (pegadinhas, tamanho do texto) ao perfil da prova que você vai prestar.
 
 ### 2. 🎓 Professor Virtual (Tira-Dúvidas Interativo)
-*   **Chat Inteligente:** Se a explicação automática não for suficiente, você pode clicar em "Não entendi, me ajude!" para conversar com a IA.
-*   **Personalização:** A IA sabe qual questão você errou e qual opção você marcou, fornecendo explicações sob medida para sua dúvida específica.
+*   **Chat Interativo:** Se a explicação de uma questão não for suficiente, você pode clicar em "Não entendi, me ajude!" para conversar com o professor virtual.
+*   **Explicações sob medida:** O sistema sabe qual questão você errou e qual opção você marcou, fornecendo explicações passo a passo para a sua dúvida específica.
 
 ### 3. 🔥 Consistência de Estudos (Ofensiva)
-*   **Contador de Streak:** O sistema motiva você a estudar todos os dias, exibindo há quantos dias seguidos você está focado.
-*   Acompanhe seu progresso e crie o hábito da aprovação.
+*   **Contador de Ofensiva (Streak):** O sistema motiva você a estudar todos os dias, exibindo há quantos dias seguidos você está focado.
+*   Acompanhe seu progresso diário e crie o hábito da aprovação.
 
 ### 4. 📚 Explicações Didáticas ("Ensinando do Zero")
 *   Ao responder, o sistema não mostra apenas "Certo" ou "Errado".
-*   **Matemática:** A IA arma a conta e explica o cálculo passo a passo.
+*   **Matemática:** Arma a conta e explica o cálculo passo a passo.
 *   **Legislação:** Cita o artigo da lei e dá exemplos práticos do dia a dia.
 
-### 5. 💾 Banco de Conhecimento Pessoal (Persistência)
-*   Upload de PDFs e arquivos de texto (apostilas, leis, provas antigas).
-*   **IndexedDB:** Os arquivos, o histórico de simulados e o **Banco de Erros** são salvos no navegador.
+### 5. 💾 Banco de Conhecimento Pessoal
+*   Faça o envio (upload) de PDFs e arquivos de texto (apostilas, leis, provas antigas) para basear seus estudos.
+*   Os arquivos, o histórico de simulados e o **Banco de Erros** ficam salvos com segurança diretamente no seu navegador.
 
 ### 6. 📊 Análise de Desempenho e Estratégia
 *   **Gráficos Visuais:** Acompanhe seus acertos, erros e tempo médio por questão.
-*   **Rastreamento de Tempo de Estudo:** Gráfico de horas acumuladas e duração de cada sessão de estudo.
-*   **Coach Virtual:** A IA analisa seus erros e gera um relatório textual com recomendações estratégicas.
+*   **Rastreamento de Tempo:** Gráfico de horas acumuladas e duração de cada sessão de estudo.
+*   **Coach Virtual:** O sistema analisa seus erros e gera um relatório com recomendações estratégicas de estudo.
 
 ---
 
-## 🚀 Tecnologias Utilizadas
+## 🚀 Como Usar o Sistema (Para Iniciantes)
 
-Este projeto foi construído com as tecnologias mais modernas do ecossistema Web:
+Não é preciso ser um especialista em tecnologia para usar o CogniQuest! Siga os passos simples abaixo:
 
-*   **Frontend:** [React](https://react.dev/) (v19) com TypeScript.
-*   **Estilização:** [Tailwind CSS](https://tailwindcss.com/) (para design responsivo e animações).
-*   **Inteligência Artificial:** [Google GenAI SDK](https://www.npmjs.com/package/@google/genai) (Gemini 2.5 Flash / Gemini 3).
-*   **Visualização de Dados:** [Recharts](https://recharts.org/) (para gráficos avançados).
-*   **Ícones:** [Lucide React](https://lucide.dev/).
-*   **Armazenamento:** IndexedDB (Nativo do navegador) para persistência de dados local.
+### 1. Acessando o Sistema
+Basta abrir o link do aplicativo no seu navegador (pelo computador ou celular).
+
+### 2. Configurando sua Chave de Acesso (Muito Importante!)
+Para que o sistema consiga gerar as questões e corrigir suas respostas, ele precisa de uma "Chave de Acesso" gratuita do Google.
+
+**Como conseguir e colocar a chave:**
+1. Acesse o site de chaves do Google: [Clique aqui para acessar](https://aistudio.google.com/app/apikey).
+2. Faça login com a sua conta do Google (seu Gmail normal).
+3. Clique no botão azul escrito **"Create API key"** (Criar chave).
+4. Copie o código longo que vai aparecer na tela.
+5. Abra o **CogniQuest**, clique no **ícone de engrenagem (Configurações)** no canto superior direito da tela.
+6. Cole o código no campo indicado e clique em **"Salvar Configurações"**.
+
+Pronto! Você só precisa fazer isso uma vez. A chave fica salva com segurança no seu próprio navegador.
+
+### 3. Criando seu Primeiro Simulado
+1. Na tela inicial, digite o nome da **Banca** do seu concurso (ex: Vunesp, Cebraspe, Instituto JK).
+2. Digite o **Cargo** que você quer (ex: Motorista, Assistente Administrativo).
+3. Escolha o seu nível de **Escolaridade**.
+4. (Opcional) Anexe arquivos em PDF ou digite um tema específico que você quer estudar hoje.
+5. Clique em **"Gerar Simulado"** e bons estudos!
 
 ---
 
-## 📦 Como Rodar o Projeto
+## 💻 Como Rodar o Projeto no seu Computador (Para Desenvolvedores)
 
-### Pré-requisitos
-*   Node.js instalado.
-*   Uma chave de API do Google Gemini (Google AI Studio).
-
-### 🔑 Configuração da API Key (Obrigatório)
-
-Para que a Inteligência Artificial funcione, você precisa configurar sua chave de API:
-
-1.  Crie um arquivo chamado **`.env`** na raiz do projeto (mesma pasta do `package.json`).
-2.  Adicione sua chave neste arquivo da seguinte forma:
-    ```env
-    API_KEY=Sua_Chave_AIzaSy_Aqui
-    ```
-    *(Nota: Se estiver usando Vite e a chave não for reconhecida, tente usar `VITE_API_KEY=...` e ajuste o código se necessário, mas o padrão deste projeto busca por `process.env.API_KEY` via configuração do bundler).*
-
-3.  Salve o arquivo.
-4.  Reinicie o terminal/servidor se ele já estiver rodando.
-
-### Passo a Passo
+Se você é programador e quer rodar o código no seu próprio computador:
 
 1.  **Clone o repositório:**
     ```bash
-    git clone https://github.com/seu-usuario/CogniQuest.IA.git
-    cd CogniQuest.IA
+    git clone https://github.com/seu-usuario/CogniQuest.git
+    cd CogniQuest
     ```
 
 2.  **Instale as dependências:**
@@ -98,27 +93,21 @@ Para que a Inteligência Artificial funcione, você precisa configurar sua chave
 
 3.  **Execute o projeto:**
     ```bash
-    npm start
-    # ou
     npm run dev
     ```
 
 4.  **Acesse:**
     Abra seu navegador em `http://localhost:3000`.
 
+*(A configuração da chave de acesso pode ser feita pela interface do sistema clicando na engrenagem, ou criando um arquivo `.env` na raiz do projeto com a linha `GEMINI_API_KEY=sua_chave_aqui`).*
+
 ---
 
 ## 🛡️ Privacidade
 
-O **CogniQuest.IA** preza pela privacidade:
-*   Seus PDFs são processados pela IA para gerar contexto, mas são armazenados **localmente** no seu dispositivo (via IndexedDB).
-*   Nenhum dado pessoal é enviado para servidores externos além do necessário para a API do Google Gemini gerar as questões.
-
----
-
-## 🤝 Contribuição
-
-Contribuições são bem-vindas! Sinta-se à vontade para abrir *issues* para reportar bugs ou *pull requests* com melhorias.
+O **CogniQuest** preza pela sua privacidade:
+*   Seus PDFs e histórico de estudos são armazenados **localmente** no seu próprio dispositivo.
+*   Seus dados não são compartilhados com terceiros.
 
 ---
 
