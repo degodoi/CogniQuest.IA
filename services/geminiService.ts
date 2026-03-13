@@ -3,7 +3,10 @@ import { Question, ExamProfile, UploadedFile, StrategicAnalysis, AnswerAttempt }
 
 // Helper to safely get the API key
 const getApiKey = () => {
-  const key = process.env.API_KEY; // Direct access as per instructions
+  const localKey = localStorage.getItem('cogniquest_gemini_api_key');
+  if (localKey) return localKey;
+
+  const key = process.env.API_KEY || process.env.GEMINI_API_KEY;
   if (!key) {
     console.error("API Key is missing in process.env.API_KEY");
     return "";
@@ -11,7 +14,13 @@ const getApiKey = () => {
   return key;
 };
 
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+const getAiInstance = () => {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("Chave de API não encontrada. Configure-a nas configurações do sistema (ícone de engrenagem) ou no arquivo .env.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 // Schema for generating questions
 const questionSchema: Schema = {
@@ -163,7 +172,7 @@ export const generateQuestions = async (
           // Attempt 1: Try with googleSearch if needed
           let response;
           try {
-             response = await ai.models.generateContent({
+             response = await getAiInstance().models.generateContent({
               model: model,
               contents: { parts },
               config: {
@@ -207,7 +216,7 @@ export const generateQuestions = async (
                  }
              });
 
-            const fallbackResponse = await ai.models.generateContent({
+            const fallbackResponse = await getAiInstance().models.generateContent({
               model: model, 
               contents: { parts: fallbackParts },
               config: {
@@ -319,7 +328,7 @@ export const analyzePerformanceAndPattern = async (
   };
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAiInstance().models.generateContent({
       model: model,
       contents: { parts: [{ text: prompt }] },
       config: {
@@ -359,7 +368,7 @@ export const getTutorResponse = async (
     Se necessário, use exemplos práticos.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await getAiInstance().models.generateContent({
     model: model,
     contents: `Histórico:\n${history}\n\nAluno: ${userQuery}`,
     config: { systemInstruction },

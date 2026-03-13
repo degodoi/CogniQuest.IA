@@ -4,7 +4,7 @@ import UploadSection from './components/UploadSection';
 import QuizInterface from './components/QuizInterface';
 import ResultsView from './components/ResultsView';
 import { generateQuestions, analyzePerformanceAndPattern } from './services/geminiService';
-import { GraduationCap, Moon, Sun, X, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { GraduationCap, Moon, Sun, X, CheckCircle, AlertCircle, Info, Settings } from 'lucide-react';
 
 // --- TOAST COMPONENT ---
 interface Toast {
@@ -50,6 +50,20 @@ const App: React.FC = () => {
     }
     return false;
   });
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState(() => localStorage.getItem('cogniquest_gemini_api_key') || '');
+
+  const handleSaveSettings = () => {
+    if (apiKeyInput.trim()) {
+      localStorage.setItem('cogniquest_gemini_api_key', apiKeyInput.trim());
+      addToast("Configurações salvas com sucesso!", "success");
+    } else {
+      localStorage.removeItem('cogniquest_gemini_api_key');
+      addToast("Chave de API removida. O sistema tentará usar a chave do .env.", "info");
+    }
+    setIsSettingsOpen(false);
+  };
 
   useEffect(() => {
     if (isDarkMode) {
@@ -176,6 +190,13 @@ const App: React.FC = () => {
           
           <div className="flex items-center gap-4">
             <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+              title="Configurações"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            <button
               onClick={toggleTheme}
               className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
             >
@@ -196,6 +217,53 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-grow p-4 md:p-8">
+        {isSettingsOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6 animate-fade-in-up">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Configurações do Sistema</h2>
+                <button onClick={() => setIsSettingsOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Chave de API do Google Gemini
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="Cole sua API Key aqui..."
+                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                  />
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Sua chave fica salva apenas no seu navegador (localStorage). 
+                    Você pode obter uma chave gratuitamente no <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline">Google AI Studio</a>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveSettings}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+                >
+                  Salvar Configurações
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {view === AppView.HOME && (
           <UploadSection 
             onStart={handleStartQuiz} 
