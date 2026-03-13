@@ -61,7 +61,8 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
 
     if (timerRef.current) clearInterval(timerRef.current);
 
-    const isCorrect = selectedOption === currentQuestion.correctIndex;
+    // Ensure correctIndex is treated as a number for comparison
+    const isCorrect = selectedOption === Number(currentQuestion.correctIndex);
     const newAttempt: AnswerAttempt = {
       questionId: currentQuestion.id,
       selectedIndex: selectedOption,
@@ -154,8 +155,10 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
             {currentQuestion.options.map((option, idx) => {
               let optionClass = "border-2 p-4 rounded-lg cursor-pointer transition-all flex items-center ";
               
+              const correctIdx = Number(currentQuestion.correctIndex);
+
               if (showExplanation) {
-                if (idx === currentQuestion.correctIndex) {
+                if (idx === correctIdx) {
                   optionClass += "border-green-500 bg-green-50 dark:bg-green-900/30 text-green-900 dark:text-green-300";
                 } else if (idx === selectedOption) {
                   optionClass += "border-red-500 bg-red-50 dark:bg-red-900/30 text-red-900 dark:text-red-300";
@@ -177,12 +180,12 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
                   className={optionClass}
                 >
                   <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 flex-shrink-0 ${
-                    showExplanation && idx === currentQuestion.correctIndex ? 'border-green-500 bg-green-500 text-white' :
+                    showExplanation && idx === correctIdx ? 'border-green-500 bg-green-500 text-white' :
                     showExplanation && idx === selectedOption ? 'border-red-500 bg-red-500 text-white' :
                     selectedOption === idx ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300 dark:border-gray-500'
                   }`}>
-                    {showExplanation && idx === currentQuestion.correctIndex && <CheckCircle className="w-4 h-4" />}
-                    {showExplanation && idx === selectedOption && idx !== currentQuestion.correctIndex && <XCircle className="w-4 h-4" />}
+                    {showExplanation && idx === correctIdx && <CheckCircle className="w-4 h-4" />}
+                    {showExplanation && idx === selectedOption && idx !== correctIdx && <XCircle className="w-4 h-4" />}
                     {!showExplanation && selectedOption === idx && <div className="w-2 h-2 bg-white rounded-full" />}
                   </div>
                   <span className="text-base">{option}</span>

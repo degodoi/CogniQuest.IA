@@ -137,7 +137,7 @@ export const generateQuestions = async (
         try {
           // Dynamic System Instruction with Explicit Distribution Rules AND Search Strategy
           let systemInstruction = `
-            Você é um examinador sênior da banca '${profile.banca}', criando uma prova simulada para o cargo de '${profile.cargo}' (Nível ${profile.escolaridade}).
+            Você é um examinador sênior${profile.banca ? ` da banca '${profile.banca}'` : ''}, criando uma prova simulada${profile.cargo ? ` para o cargo de '${profile.cargo}'` : ''} (Nível ${profile.escolaridade}).
             
             SUA MISSÃO:
             1. Gerar exatamente ${questionsInBatch} questões para este lote.
@@ -145,17 +145,23 @@ export const generateQuestions = async (
                ${distributionString}
             3. ESTRATÉGIA DESTE LOTE: ${currentStrategy}
             4. INSTRUÇÃO DE BUSCA: Não se limite a uma única fonte. Varra a internet por provas anteriores, fóruns de concurso e sites especializados para trazer diversidade.
-            5. Estilo: Imite o estilo da banca '${profile.banca}' (tamanho do texto, vocabulário).
+            5. Estilo: Imite o estilo ${profile.banca ? `da banca '${profile.banca}'` : 'padrão de concursos'} (tamanho do texto, vocabulário).
           `;
 
           if (isAutomaticMode) {
             systemInstruction += `\nMODO AUTOMÁTICO: Use o 'googleSearch' agressivamente para validar o conteúdo programático real.`;
           }
 
-          let prompt = `Gere ${questionsInBatch} questões (${countPT} Port, ${countMat} Mat, ${countSpec} Específicas). Cargo: ${profile.cargo}.`;
+          if (extraContext) {
+             systemInstruction += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
+          }
+
+          let prompt = `Gere ${questionsInBatch} questões (${countPT} Port, ${countMat} Mat, ${countSpec} Específicas).${profile.cargo ? ` Cargo: ${profile.cargo}.` : ''}`;
           prompt += `\nContexto de Busca: ${currentStrategy}`;
           
-          if (extraContext) prompt += `\nFoco/Pedido do Usuário: "${extraContext}".`;
+          if (extraContext) {
+            prompt += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
+          }
           
           if (files.length > 0) {
             prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como base prioritária, mas use seu conhecimento da banca para preencher lacunas de matérias que não estejam nos arquivos.`;
@@ -200,14 +206,21 @@ export const generateQuestions = async (
           // Fallback Strategy: No Search, Standard Prompt
           try {
             let fallbackInstruction = `
-              Você é um especialista na banca ${profile.banca}.
-              Crie uma prova para ${profile.cargo} (${profile.escolaridade}).
+              Você é um especialista${profile.banca ? ` na banca ${profile.banca}` : ''}.
+              Crie uma prova${profile.cargo ? ` para ${profile.cargo}` : ''} (${profile.escolaridade}).
               Gere EXATAMENTE:
               ${distributionString}
               Retorne APENAS JSON.
             `;
             
-            let fallbackPrompt = `Gere ${questionsInBatch} questões diversificadas para ${profile.cargo}.`;
+            if (extraContext) {
+               fallbackInstruction += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
+            }
+
+            let fallbackPrompt = `Gere ${questionsInBatch} questões diversificadas${profile.cargo ? ` para ${profile.cargo}` : ''}.`;
+            if (extraContext) {
+               fallbackPrompt += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
+            }
 
              const fallbackParts: any[] = [{ text: fallbackPrompt }];
              files.forEach(file => {
@@ -261,10 +274,24 @@ export const generateQuestions = async (
         throw new Error("A IA respondeu, mas não foi possível extrair questões válidas. Tente novamente.");
     }
 
-    return finalQuestions.map((q: any, index: number) => ({
-      ...q,
-      id: `q-${Date.now()}-${index}`
-    }));
+    return finalQuestions.map((q: any, index: number) => {
+      let parsedIndex = Number(q.correctIndex);
+      if (isNaN(parsedIndex) && typeof q.correctIndex === 'string') {
+         const letterMatch = q.correctIndex.toUpperCase().match(/[A-E]/);
+         if (letterMatch) {
+            parsedIndex = letterMatch[0].charCodeAt(0) - 65; // A=0, B=1, etc.
+         } else {
+            parsedIndex = 0; // fallback
+         }
+      } else if (isNaN(parsedIndex)) {
+          parsedIndex = 0;
+      }
+      return {
+        ...q,
+        correctIndex: parsedIndex,
+        id: `q-${Date.now()}-${index}`
+      };
+    });
 
   } catch (error: any) {
     console.error("Error generating questions:", error);
@@ -304,15 +331,15 @@ export const analyzePerformanceAndPattern = async (
   const prompt = `
     Aja como um coach de concursos.
     Analise o desempenho para:
-    Cargo: ${profile.cargo} (${profile.escolaridade})
-    Banca: ${profile.banca}
+    Cargo: ${profile.cargo || 'Geral'} (${profile.escolaridade})
+    Banca: ${profile.banca || 'Não especificada'}
     
     Dados:
     Acertos: ${correctCount}/${total}
     ${topicSummary}
 
-    1. Identifique pontos críticos baseados no peso típico dessas matérias para a banca ${profile.banca}.
-    2. Pesquise sobre o "Padrão ${profile.banca}" (estilo de cobrança, pegadinhas comuns). Use a busca do Google para encontrar informações RECENTES sobre o estilo dessa banca.
+    1. Identifique pontos críticos baseados no peso típico dessas matérias para a banca ${profile.banca || 'padrão'}.
+    2. Pesquise sobre o "Padrão ${profile.banca || 'padrão'}" (estilo de cobrança, pegadinhas comuns). Use a busca do Google para encontrar informações RECENTES sobre o estilo dessa banca.
     3. Crie um plano de ação.
   `;
 

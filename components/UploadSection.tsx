@@ -173,11 +173,6 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
   };
 
   const handleStartWrapper = () => {
-    if (!banca.trim() || !cargo.trim()) {
-      setShowValidation(true);
-      onError("Por favor, preencha a Banca e o Cargo para iniciar.");
-      return;
-    }
     setShowValidation(false);
     savePreferences(); 
     updateStreakOnStart();
@@ -476,29 +471,27 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
-                  <span className="flex items-center"><Building2 className="w-4 h-4 mr-1.5 text-indigo-500" /> Banca Organizadora</span>
-                  {showValidation && !banca && <span className="text-red-500 text-xs font-bold bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded">Obrigatório</span>}
+                  <span className="flex items-center"><Building2 className="w-4 h-4 mr-1.5 text-indigo-500" /> Banca Organizadora (Opcional)</span>
                 </label>
                 <input 
                   type="text" 
                   value={banca}
                   onChange={(e) => setBanca(e.target.value)}
                   placeholder="Ex: Cebraspe, Vunesp..."
-                  className={`w-full p-3.5 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-medium ${showValidation && !banca ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600'}`}
+                  className={`w-full p-3.5 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-medium border-gray-200 dark:border-gray-600`}
                 />
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
-                  <span className="flex items-center"><Briefcase className="w-4 h-4 mr-1.5 text-indigo-500" /> Cargo Pretendido</span>
-                  {showValidation && !cargo && <span className="text-red-500 text-xs font-bold bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded">Obrigatório</span>}
+                  <span className="flex items-center"><Briefcase className="w-4 h-4 mr-1.5 text-indigo-500" /> Cargo Pretendido (Opcional)</span>
                 </label>
                 <input 
                   type="text" 
                   value={cargo}
                   onChange={(e) => setCargo(e.target.value)}
                   placeholder="Ex: Policial, Técnico..."
-                  className={`w-full p-3.5 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-medium ${showValidation && !cargo ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600'}`}
+                  className={`w-full p-3.5 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-medium border-gray-200 dark:border-gray-600`}
                 />
               </div>
 
@@ -618,13 +611,6 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
                   "Gerar Simulado Agora"
               )}
             </button>
-            
-            {showValidation && (!banca || !cargo) && (
-              <p className="text-xs text-red-500 text-center flex items-center justify-center font-bold animate-pulse bg-red-50 dark:bg-red-900/10 py-2 rounded-lg">
-                <AlertTriangle className="w-3 h-3 mr-1.5" />
-                Preencha Banca e Cargo para começar.
-              </p>
-            )}
           </div>
         </div>
 
