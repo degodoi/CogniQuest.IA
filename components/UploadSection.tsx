@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UploadedFile, ExamProfile, Question, HistoryItem, StrategicAnalysis } from '../types';
 import { saveFile, getFiles, deleteFile, getErrorQuestions, getHistory } from '../services/storageService';
-import { UploadCloud, FileText, Trash2, BookOpen, BrainCircuit, Play, Flame, History, Building2, Briefcase, GraduationCap, Trophy, Target, Clock, TrendingUp, Lightbulb, ListOrdered, AlertTriangle } from 'lucide-react';
+import { UploadCloud, FileText, Trash2, BookOpen, BrainCircuit, Play, Flame, History, Building2, Briefcase, GraduationCap, Trophy, Target, Clock, TrendingUp, Lightbulb, ListOrdered, AlertTriangle, Calendar, Award } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 
 interface UploadSectionProps {
@@ -190,20 +190,34 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
     onStartReview(errorQuestions);
   };
 
+  // --- STATISTICS CALCULATION ---
   const stats = useMemo(() => {
-    if (allHistory.length === 0) return null;
+    // Basic counters
+    let lifetimeSeconds = 0;
+    let lifetimeQuestions = 0;
+    let lifetimeCorrect = 0;
+    
+    let todaySeconds = 0;
+    let todayQuestions = 0;
 
-    let totalSeconds = 0;
-    let totalQuestionsAnswered = 0;
-    let totalCorrect = 0;
     const topicStats: Record<string, { correct: number; total: number }> = {};
+    const todayDateString = new Date().toDateString();
 
     allHistory.forEach(h => {
-      totalSeconds += h.totalTimeSeconds || 0;
-      totalQuestionsAnswered += h.totalQuestions || 0;
+      // 1. Lifetime Stats
+      lifetimeSeconds += h.totalTimeSeconds || 0;
+      lifetimeQuestions += h.totalQuestions || 0;
       const correctInSession = Math.round((h.score / 100) * h.totalQuestions);
-      totalCorrect += correctInSession;
+      lifetimeCorrect += correctInSession;
 
+      // 2. Today Stats
+      const sessionDate = new Date(h.date);
+      if (sessionDate.toDateString() === todayDateString) {
+        todaySeconds += h.totalTimeSeconds || 0;
+        todayQuestions += h.totalQuestions || 0;
+      }
+
+      // 3. Topic Stats
       if (h.questions && h.answers) {
         h.questions.forEach(q => {
           const t = q.topic || 'Geral';
@@ -215,194 +229,292 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
       }
     });
 
+    // Format Topic Performance for Chart
+    // Sort by percentage ASCENDING (Weakest first) to help user focus
     const topicPerformance = Object.entries(topicStats).map(([topic, data]) => ({
-      topic,
+      topic: topic.length > 15 ? topic.substring(0, 15) + '...' : topic, // Truncate long names
+      fullTopic: topic,
       percentage: Math.round((data.correct / data.total) * 100),
-      total: data.total
+      total: data.total,
+      correct: data.correct
     })).sort((a, b) => a.percentage - b.percentage);
 
-    const globalScore = totalQuestionsAnswered > 0 ? Math.round((totalCorrect / totalQuestionsAnswered) * 100) : 0;
+    const globalAccuracy = lifetimeQuestions > 0 ? Math.round((lifetimeCorrect / lifetimeQuestions) * 100) : 0;
     
+    // Formatting Helpers
+    const formatTime = (totalSecs: number) => {
+       const h = Math.floor(totalSecs / 3600);
+       const m = Math.floor((totalSecs % 3600) / 60);
+       if (h > 0) return `${h}h ${m}m`;
+       return `${m}m`;
+    };
+
     const lastSession = allHistory[allHistory.length - 1];
     const latestPlan = lastSession?.analysis?.recommendations || "Realize um simulado para gerar seu plano.";
 
     return {
-      totalHours: Math.floor(totalSeconds / 3600),
-      totalMinutes: Math.floor((totalSeconds % 3600) / 60),
-      globalScore,
-      questionsCount: totalQuestionsAnswered,
+      lifetime: {
+        time: formatTime(lifetimeSeconds),
+        questions: lifetimeQuestions,
+        accuracy: globalAccuracy
+      },
+      today: {
+        time: formatTime(todaySeconds),
+        questions: todayQuestions
+      },
       topicPerformance,
-      latestPlan
+      latestPlan,
+      hasData: allHistory.length > 0
     };
   }, [allHistory]);
 
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white dark:bg-gray-800 p-3 border border-gray-200 dark:border-gray-700 shadow-lg rounded-lg z-50">
+          <p className="font-bold text-gray-700 dark:text-gray-200 mb-1">{data.fullTopic}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Acertos: <span className="font-mono font-bold text-gray-800 dark:text-white">{data.correct}/{data.total}</span>
+          </p>
+          <p className={`text-sm font-bold mt-1 ${
+             data.percentage >= 70 ? 'text-green-500' : data.percentage >= 50 ? 'text-amber-500' : 'text-red-500'
+          }`}>
+            Aproveitamento: {data.percentage}%
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-10">
+    <div className="max-w-7xl mx-auto space-y-8 animate-fade-in pb-10">
       
       {/* Header & Streak */}
-      <div className="flex flex-col md:flex-row items-center justify-between">
-         <div className="flex items-center space-x-4 mb-4 md:mb-0">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-2xl shadow-lg">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+         <div className="flex items-center space-x-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-2xl shadow-lg ring-4 ring-white dark:ring-gray-800">
               <BookOpen className="w-7 h-7 text-white" />
             </div>
             <div>
                <h2 className="text-2xl font-extrabold text-gray-800 dark:text-white tracking-tight">Painel do Estudante</h2>
-               <p className="text-sm text-gray-500 dark:text-gray-400">Bem-vindo de volta!</p>
+               <p className="text-sm text-gray-500 dark:text-gray-400">Prepare-se com inteligência.</p>
             </div>
          </div>
          
-         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-5 py-2 rounded-2xl flex items-center shadow-sm">
-            <div className={`p-2 rounded-full mr-3 ${streak > 0 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
-              <Flame className="w-5 h-5" />
+         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-6 py-3 rounded-2xl flex items-center shadow-sm">
+            <div className={`p-2 rounded-full mr-4 ${streak > 0 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
+              <Flame className="w-6 h-6" />
             </div>
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">Ofensiva</p>
-              <p className="text-lg font-bold text-gray-800 dark:text-white">{streak} dias</p>
+              <div className="flex items-baseline">
+                <p className="text-2xl font-bold text-gray-800 dark:text-white mr-1">{streak}</p>
+                <span className="text-sm text-gray-500">dias</span>
+              </div>
             </div>
          </div>
       </div>
 
-      {/* --- DASHBOARD SECTION --- */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-fade-in-up">
+      {/* --- DASHBOARD GRIDS --- */}
+      {stats.hasData ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up">
           
-          <div className="md:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center">
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl mr-4 text-blue-600 dark:text-blue-400">
-                <Clock className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 uppercase font-bold">Tempo Total</p>
-                <h3 className="text-2xl font-bold text-gray-800 dark:text-white">
-                  {stats.totalHours}h {stats.totalMinutes}m
+          {/* Col 1: Metrics (Today & Lifetime) */}
+          <div className="space-y-6 lg:col-span-1">
+             
+             {/* TODAY CARD */}
+             <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform duration-500">
+                  <Calendar className="w-24 h-24" />
+                </div>
+                <h3 className="text-blue-100 font-medium text-sm uppercase tracking-wide mb-4 flex items-center">
+                  <Clock className="w-4 h-4 mr-2" />
+                  Hoje
                 </h3>
-              </div>
-            </div>
+                <div className="grid grid-cols-2 gap-4 relative z-10">
+                  <div>
+                     <p className="text-3xl font-bold">{stats.today.time}</p>
+                     <p className="text-blue-200 text-xs mt-1">Tempo de Estudo</p>
+                  </div>
+                  <div>
+                     <p className="text-3xl font-bold">{stats.today.questions}</p>
+                     <p className="text-blue-200 text-xs mt-1">Questões Feitas</p>
+                  </div>
+                </div>
+             </div>
 
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center">
-              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl mr-4 text-green-600 dark:text-green-400">
-                <Target className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 uppercase font-bold">Precisão Global</p>
-                <h3 className="text-2xl font-bold text-gray-800 dark:text-white">{stats.globalScore}%</h3>
-              </div>
-            </div>
+             {/* LIFETIME CARD */}
+             <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden">
+                <h3 className="text-gray-500 dark:text-gray-400 font-bold text-sm uppercase tracking-wide mb-6 flex items-center">
+                  <Trophy className="w-4 h-4 mr-2 text-yellow-500" />
+                  Jornada Total
+                </h3>
+                
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-4">
+                    <div className="flex items-center">
+                       <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-lg mr-3 text-green-600 dark:text-green-400">
+                          <Target className="w-5 h-5" />
+                       </div>
+                       <span className="text-gray-600 dark:text-gray-300 font-medium">Precisão Média</span>
+                    </div>
+                    <span className="text-xl font-bold text-gray-800 dark:text-white">{stats.lifetime.accuracy}%</span>
+                  </div>
 
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center">
-              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl mr-4 text-purple-600 dark:text-purple-400">
-                <Trophy className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 uppercase font-bold">Questões Feitas</p>
-                <h3 className="text-2xl font-bold text-gray-800 dark:text-white">{stats.questionsCount}</h3>
-              </div>
-            </div>
+                  <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-4">
+                    <div className="flex items-center">
+                       <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg mr-3 text-purple-600 dark:text-purple-400">
+                          <ListOrdered className="w-5 h-5" />
+                       </div>
+                       <span className="text-gray-600 dark:text-gray-300 font-medium">Questões Totais</span>
+                    </div>
+                    <span className="text-xl font-bold text-gray-800 dark:text-white">{stats.lifetime.questions}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                       <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-lg mr-3 text-orange-600 dark:text-orange-400">
+                          <History className="w-5 h-5" />
+                       </div>
+                       <span className="text-gray-600 dark:text-gray-300 font-medium">Tempo Total</span>
+                    </div>
+                    <span className="text-xl font-bold text-gray-800 dark:text-white">{stats.lifetime.time}</span>
+                  </div>
+                </div>
+             </div>
           </div>
 
-          <div className="md:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-             <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center">
-               <TrendingUp className="w-5 h-5 mr-2 text-indigo-500" />
-               Pontos Fortes e Fracos (Geral)
-             </h3>
-             <div className="h-64">
-               <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={stats.topicPerformance} layout="vertical" margin={{top: 5, right: 30, left: 40, bottom: 5}}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#374151" opacity={0.1} />
-                    <XAxis type="number" domain={[0, 100]} hide />
-                    <YAxis dataKey="topic" type="category" width={100} tick={{fontSize: 10}} interval={0} />
-                    <Tooltip 
-                      contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}
-                      cursor={{fill: 'transparent'}}
-                    />
-                    <Bar dataKey="percentage" radius={[0, 4, 4, 0]} barSize={20}>
-                      {stats.topicPerformance.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.percentage >= 70 ? COLORS.high : entry.percentage >= 50 ? COLORS.mid : COLORS.low} />
-                      ))}
-                    </Bar>
-                 </BarChart>
-               </ResponsiveContainer>
-             </div>
-             <p className="text-xs text-center text-gray-400 mt-2">Baseado em todo o seu histórico.</p>
-          </div>
+          {/* Col 2: Strengths & Weaknesses (Updated Chart) */}
+          <div className="lg:col-span-2 flex flex-col gap-6">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm flex-1 min-h-[300px]">
+               <div className="flex justify-between items-center mb-6">
+                 <div>
+                   <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center">
+                     <TrendingUp className="w-5 h-5 mr-2 text-indigo-500" />
+                     Desempenho por Tópico
+                   </h3>
+                   <p className="text-xs text-gray-400 mt-1">Ordenado do menor para o maior (Foque no topo!)</p>
+                 </div>
+               </div>
+               
+               <div className="h-[280px]">
+                 <ResponsiveContainer width="100%" height="100%">
+                   <BarChart 
+                      data={stats.topicPerformance} 
+                      layout="vertical" 
+                      margin={{top: 5, right: 30, left: 40, bottom: 5}}
+                   >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#374151" opacity={0.1} />
+                      <XAxis type="number" domain={[0, 100]} hide />
+                      <YAxis 
+                        dataKey="topic" 
+                        type="category" 
+                        width={120} 
+                        tick={{fontSize: 11, fill: '#6B7280', fontWeight: 500}} 
+                        interval={0} 
+                      />
+                      <Tooltip cursor={{fill: 'transparent'}} content={<CustomTooltip />} />
+                      <Bar dataKey="percentage" radius={[0, 6, 6, 0]} barSize={24} background={{ fill: '#F3F4F6', radius: [0,6,6,0] }}>
+                        {stats.topicPerformance.map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={entry.percentage >= 70 ? COLORS.high : entry.percentage >= 50 ? COLORS.mid : COLORS.low} 
+                          />
+                        ))}
+                      </Bar>
+                   </BarChart>
+                 </ResponsiveContainer>
+               </div>
+            </div>
 
-          <div className="md:col-span-2 bg-gradient-to-br from-indigo-50 to-white dark:from-gray-800 dark:to-gray-800 p-6 rounded-2xl border border-indigo-100 dark:border-gray-700 shadow-sm flex flex-col">
-             <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center">
-               <Lightbulb className="w-5 h-5 mr-2 text-amber-500" />
-               Plano de Estudo Atual
-             </h3>
-             <div className="flex-1 overflow-y-auto custom-scrollbar max-h-60 pr-2">
-               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                 {stats.latestPlan}
-               </p>
-             </div>
-             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-               <p className="text-xs text-gray-500 italic">
-                 Dica: Faça um novo simulado para atualizar este plano com base no seu desempenho mais recente.
-               </p>
-             </div>
+            {/* Plan Card */}
+            <div className="bg-amber-50 dark:bg-gray-800/80 p-6 rounded-3xl border border-amber-100 dark:border-gray-700 shadow-sm flex flex-col">
+               <h3 className="text-lg font-bold text-amber-800 dark:text-amber-400 mb-3 flex items-center">
+                 <Lightbulb className="w-5 h-5 mr-2" />
+                 Plano de Ação Atual
+               </h3>
+               <div className="flex-1 overflow-y-auto custom-scrollbar max-h-32 pr-2">
+                 <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                   {stats.latestPlan}
+                 </p>
+               </div>
+            </div>
           </div>
 
         </div>
+      ) : (
+        <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 text-center shadow-sm animate-fade-in-up">
+           <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Play className="w-8 h-8 text-indigo-500" />
+           </div>
+           <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Comece sua Jornada</h3>
+           <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+             Complete seu primeiro simulado para desbloquear as estatísticas detalhadas de "Hoje" e "Total".
+           </p>
+        </div>
       )}
 
-      {/* --- CONFIG SECTION (FORM) --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      {/* --- ACTION SECTION (CONFIG & START) --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
         
         {/* Main Form */}
-        <div className="md:col-span-2 bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 transition-colors relative overflow-hidden">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 transition-colors relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
           
           <div className="flex items-center space-x-2 mb-6">
-            <Play className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <div className="bg-indigo-100 dark:bg-indigo-900/30 p-2 rounded-lg">
+               <Play className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
             <h3 className="text-xl font-bold text-gray-800 dark:text-white">Iniciar Novo Simulado</h3>
           </div>
 
           <div className="space-y-6">
             
             {/* Input Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center justify-between">
-                  <span className="flex items-center"><Building2 className="w-4 h-4 mr-1 text-indigo-500" /> Banca Organizadora</span>
-                  {showValidation && !banca && <span className="text-red-500 text-xs font-bold">Obrigatório</span>}
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                  <span className="flex items-center"><Building2 className="w-4 h-4 mr-1.5 text-indigo-500" /> Banca Organizadora</span>
+                  {showValidation && !banca && <span className="text-red-500 text-xs font-bold bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded">Obrigatório</span>}
                 </label>
                 <input 
                   type="text" 
                   value={banca}
                   onChange={(e) => setBanca(e.target.value)}
-                  placeholder="Ex: Cebraspe, Vunesp, FGV..."
-                  className={`w-full p-3 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-semibold ${showValidation && !banca ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600'}`}
+                  placeholder="Ex: Cebraspe, Vunesp..."
+                  className={`w-full p-3.5 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-medium ${showValidation && !banca ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600'}`}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center justify-between">
-                  <span className="flex items-center"><Briefcase className="w-4 h-4 mr-1 text-indigo-500" /> Cargo Pretendido</span>
-                  {showValidation && !cargo && <span className="text-red-500 text-xs font-bold">Obrigatório</span>}
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                  <span className="flex items-center"><Briefcase className="w-4 h-4 mr-1.5 text-indigo-500" /> Cargo Pretendido</span>
+                  {showValidation && !cargo && <span className="text-red-500 text-xs font-bold bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded">Obrigatório</span>}
                 </label>
                 <input 
                   type="text" 
                   value={cargo}
                   onChange={(e) => setCargo(e.target.value)}
-                  placeholder="Ex: Policial, Técnico Adm..."
-                  className={`w-full p-3 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-semibold ${showValidation && !cargo ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600'}`}
+                  placeholder="Ex: Policial, Técnico..."
+                  className={`w-full p-3.5 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-medium ${showValidation && !cargo ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600'}`}
                 />
               </div>
 
               <div className="space-y-2">
-                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
-                  <GraduationCap className="w-4 h-4 mr-1 text-indigo-500" /> Nível de Escolaridade
+                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center">
+                  <GraduationCap className="w-4 h-4 mr-1.5 text-indigo-500" /> Nível de Escolaridade
                 </label>
                 <div className="flex gap-2">
                   {(['Fundamental', 'Médio', 'Superior'] as const).map((nivel) => (
                     <button
                       key={nivel}
                       onClick={() => setEscolaridade(nivel)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all border ${
+                      className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
                         escolaridade === nivel 
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
-                          : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-indigo-200 dark:ring-indigo-900' 
+                          : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
                       }`}
                     >
                       {nivel}
@@ -412,18 +524,18 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
               </div>
 
               <div className="space-y-2">
-                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
-                  <ListOrdered className="w-4 h-4 mr-1 text-indigo-500" /> Quantidade de Questões
+                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center">
+                  <ListOrdered className="w-4 h-4 mr-1.5 text-indigo-500" /> Quantidade de Questões
                 </label>
                 <div className="flex gap-2">
                   {([10, 20, 30, 40] as const).map((num) => (
                     <button
                       key={num}
                       onClick={() => setQCount(num)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all border ${
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
                         qCount === num 
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
-                          : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-indigo-200 dark:ring-indigo-900' 
+                          : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
                       }`}
                     >
                       {num}
@@ -437,11 +549,11 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
             {/* File Upload */}
             <div className="relative pt-4 border-t border-gray-100 dark:border-gray-700">
               <label className="flex justify-between items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                <span>Material de Apoio (PDFs)</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full">Máx 4MB por arquivo</span>
+                <span className="flex items-center font-semibold"><FileText className="w-4 h-4 mr-1.5 text-indigo-500"/> Material de Apoio (PDFs)</span>
+                <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full">Máx 4MB</span>
               </label>
               
-              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 text-center hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors relative mb-4 group cursor-pointer">
+              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl p-6 text-center hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors relative mb-4 group cursor-pointer bg-gray-50/50 dark:bg-gray-800/50">
                 <input
                   type="file"
                   multiple
@@ -450,29 +562,30 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
                 <div className="transform group-hover:scale-105 transition-transform duration-300 flex flex-col items-center">
-                  <UploadCloud className="w-8 h-8 text-gray-400 dark:text-gray-500 mb-1 group-hover:text-indigo-500" />
-                  <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">Arraste PDFs aqui</p>
+                  <div className="bg-white dark:bg-gray-700 p-3 rounded-full shadow-sm mb-3">
+                     <UploadCloud className="w-6 h-6 text-indigo-500" />
+                  </div>
+                  <p className="text-sm text-gray-700 dark:text-gray-200 font-medium">Clique ou arraste seus PDFs aqui</p>
+                  <p className="text-xs text-gray-400 mt-1">A IA criará questões baseadas neles.</p>
                 </div>
               </div>
 
               {/* File List */}
               {storedFiles.length > 0 && (
-                <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-3 max-h-32 overflow-y-auto custom-scrollbar border border-gray-100 dark:border-gray-700 mb-4">
-                  <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                     {storedFiles.map((file, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 shadow-sm">
+                      <div key={idx} className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 group">
                         <div className="flex items-center space-x-3 overflow-hidden">
-                          <FileText className="w-4 h-4 text-indigo-500 dark:text-indigo-400 flex-shrink-0" />
-                          <span className="text-xs text-gray-700 dark:text-gray-200 truncate">{file.name}</span>
+                          <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">{file.name}</span>
                         </div>
                         {file.id && (
-                          <button onClick={() => handleRemoveFile(file.id!)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition ml-2">
-                            <Trash2 className="w-3 h-3" />
+                          <button onClick={() => handleRemoveFile(file.id!)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition opacity-0 group-hover:opacity-100">
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
                     ))}
-                  </div>
                 </div>
               )}
             </div>
@@ -482,15 +595,15 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
                <textarea
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
-                placeholder="Dica extra: Ex: 'Quero focar em Direito Constitucional' ou 'Gere perguntas difíceis'..."
-                className="w-full p-3 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-16 placeholder-gray-400 transition-colors"
+                placeholder="Dica opcional para a IA: Ex: 'Quero focar em Direito Constitucional' ou 'Gere perguntas difíceis'..."
+                className="w-full p-4 text-sm border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-20 placeholder-gray-400 transition-colors"
               />
             </div>
 
             <button
               onClick={handleStartWrapper}
               disabled={isLoading}
-              className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition-all transform hover:-translate-y-1 active:translate-y-0 flex items-center justify-center ${
+              className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-xl shadow-indigo-500/20 transition-all transform hover:-translate-y-1 active:translate-y-0 flex items-center justify-center ${
                 isLoading 
                   ? 'bg-gray-400 dark:bg-gray-600 cursor-wait' 
                   : 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500'
@@ -499,40 +612,42 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
               {isLoading ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  <span>Gerando Simulado ({qCount} questões)...</span>
+                  <span>Gerando Simulado Inteligente...</span>
                 </div>
               ) : (
-                  "Iniciar Simulado Agora"
+                  "Gerar Simulado Agora"
               )}
             </button>
             
             {showValidation && (!banca || !cargo) && (
-              <p className="text-xs text-red-500 text-center flex items-center justify-center font-semibold animate-pulse">
-                <AlertTriangle className="w-3 h-3 mr-1" />
-                Preencha os campos obrigatórios acima.
+              <p className="text-xs text-red-500 text-center flex items-center justify-center font-bold animate-pulse bg-red-50 dark:bg-red-900/10 py-2 rounded-lg">
+                <AlertTriangle className="w-3 h-3 mr-1.5" />
+                Preencha Banca e Cargo para começar.
               </p>
             )}
           </div>
         </div>
 
         {/* Right Panel (Side items) */}
-        <div className="space-y-6 md:col-span-1">
+        <div className="space-y-6 lg:col-span-1">
           
           {/* Review Card */}
-          <div className="bg-gradient-to-b from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-amber-700/50 p-6 rounded-2xl shadow-xl flex flex-col relative overflow-hidden">
-            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-amber-400/20 rounded-full blur-2xl pointer-events-none"></div>
+          <div className="bg-gradient-to-b from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-amber-700/50 p-6 rounded-3xl shadow-lg flex flex-col relative overflow-hidden group">
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-amber-400/20 rounded-full blur-2xl pointer-events-none group-hover:bg-amber-400/30 transition-all"></div>
 
             <div className="flex items-center space-x-2 mb-4 relative z-10">
-              <BrainCircuit className="w-6 h-6 text-amber-600 dark:text-amber-500" />
+              <div className="bg-white dark:bg-gray-700 p-2 rounded-lg shadow-sm">
+                <BrainCircuit className="w-5 h-5 text-amber-600 dark:text-amber-500" />
+              </div>
               <h3 className="text-lg font-bold text-gray-800 dark:text-white">Banco de Erros</h3>
             </div>
             
-            <div className="flex-grow flex flex-col justify-center items-center text-center space-y-2 relative z-10 py-4">
-              <div className="text-4xl font-extrabold text-amber-600 dark:text-amber-500">
+            <div className="flex-grow flex flex-col justify-center items-center text-center space-y-1 relative z-10 py-6">
+              <div className="text-5xl font-extrabold text-amber-600 dark:text-amber-500 tracking-tighter">
                 {errorQuestions.length}
               </div>
-              <p className="text-xs text-gray-600 dark:text-gray-300 font-medium px-2">
-                Questões pendentes.
+              <p className="text-xs text-gray-600 dark:text-gray-300 font-medium uppercase tracking-wide">
+                Questões Pendentes
               </p>
             </div>
 
@@ -540,10 +655,10 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
               <button
                 onClick={handleReviewWrapper}
                 disabled={errorQuestions.length === 0 || isLoading}
-                className={`w-full py-3 rounded-xl font-bold text-white text-sm shadow-md transition-all transform hover:-translate-y-1 ${
+                className={`w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md transition-all transform hover:-translate-y-1 ${
                   errorQuestions.length === 0
                     ? 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed text-gray-500'
-                    : 'bg-amber-500 hover:bg-amber-600'
+                    : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
                 }`}
               >
                 Revisar Erros
@@ -552,35 +667,43 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onStart, onStartReview, o
           </div>
 
           {/* History Card */}
-          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-6 rounded-2xl shadow-lg flex flex-col relative overflow-hidden">
-            <div className="flex items-center space-x-2 mb-4">
-              <History className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white">Histórico Recente</h3>
+          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-6 rounded-3xl shadow-lg flex flex-col relative overflow-hidden h-[400px]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg">
+                  <History className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white">Recentes</h3>
+              </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
               {recentHistory.length === 0 ? (
-                 <p className="text-sm text-gray-400 italic text-center py-4">Nenhum simulado recente.</p>
+                 <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
+                    <History className="w-8 h-8 opacity-20" />
+                    <p className="text-xs italic">Nenhum histórico ainda.</p>
+                 </div>
               ) : (
                 recentHistory.map((item, idx) => (
                   <button 
                     key={idx}
                     onClick={() => onViewHistory(item)}
-                    className="w-full text-left p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-100 dark:border-gray-600 flex justify-between items-center group"
+                    className="w-full text-left p-3 rounded-2xl bg-gray-50 dark:bg-gray-700/30 hover:bg-white dark:hover:bg-gray-700 border border-transparent hover:border-purple-200 dark:hover:border-purple-500/30 hover:shadow-md transition-all group relative overflow-hidden"
                   >
-                    <div className="overflow-hidden">
-                      <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">{new Date(item.date).toLocaleDateString('pt-BR')}</p>
-                      <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">
-                        {item.profile ? `${item.profile.cargo}` : 'Simulado Antigo'}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0 ml-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-bold block mb-1 ${
-                        item.score >= 70 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{new Date(item.date).toLocaleDateString('pt-BR')}</p>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                        item.score >= 70 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                       }`}>
                         {item.score}%
                       </span>
                     </div>
+                    <p className="text-sm font-bold text-gray-800 dark:text-white truncate">
+                      {item.profile ? item.profile.cargo : 'Simulado Geral'}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate mt-0.5">
+                      {item.profile ? item.profile.banca : ''} • {item.totalQuestions} questões
+                    </p>
                   </button>
                 ))
               )}

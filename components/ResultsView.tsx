@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AnswerAttempt, Question, StrategicAnalysis, ExamProfile, HistoryItem } from '../types';
 import { saveHistory, getHistory, saveErrorQuestion, removeErrorQuestion } from '../services/storageService';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, AreaChart, Area } from 'recharts';
-import { AlertTriangle, Award, BookOpen, Clock, Target, TrendingUp, Layers, Hourglass, Calendar } from 'lucide-react';
+import { AlertTriangle, Award, BookOpen, Clock, Target, TrendingUp, Layers, Hourglass, Calendar, CheckCircle2, XCircle } from 'lucide-react';
 
 interface ResultsViewProps {
   answers: AnswerAttempt[];
@@ -111,8 +111,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
     minutos: Math.round((h.totalTimeSeconds || 0) / 60)
   }));
 
-  const totalLifetimeSeconds = history.reduce((acc, curr) => acc + (curr.totalTimeSeconds || 0), 0);
-
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -129,246 +127,132 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
     return null;
   };
 
+  const percentage = Math.round((correctCount / answers.length) * 100);
+
   return (
     <div className="w-full max-w-7xl mx-auto space-y-8 animate-fade-in-up pb-12">
       
+      {/* Alert Banner for Errors */}
       {savedErrorsCount > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 rounded-xl flex items-center justify-between">
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded-r-xl flex items-center justify-between shadow-sm">
           <div className="flex items-center">
             <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400 mr-3" />
             <div>
-              <h4 className="font-bold text-amber-800 dark:text-amber-200">Atenção aos Detalhes</h4>
-              <p className="text-sm text-amber-700 dark:text-amber-300">
-                {savedErrorsCount} erros foram salvos para revisão.
+              <h4 className="font-bold text-amber-800 dark:text-amber-200 text-sm uppercase">Banco de Erros Atualizado</h4>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                Adicionamos <strong>{savedErrorsCount} questões</strong> à sua lista de revisão. Estude-as mais tarde!
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Profile Header in Results */}
-      <div className="text-center mb-4">
-        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Resultado: {profile.cargo}</h2>
-        <p className="text-sm text-gray-500">{profile.banca} - Nível {profile.escolaridade}</p>
+      {/* --- SECTION 1: SESSION SUMMARY (Immediate Feedback) --- */}
+      <div className="text-center mb-6">
+        <h2 className="text-3xl font-extrabold text-gray-800 dark:text-white tracking-tight">Resultado do Simulado</h2>
+        <p className="text-gray-500 font-medium">{profile.cargo} • {profile.banca}</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Score Card */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-          <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Nota Final</p>
-          <div className="flex items-end space-x-2">
-            <h3 className="text-4xl font-extrabold text-gray-800 dark:text-white">{Math.round((correctCount / answers.length) * 100)}%</h3>
-            <span className="text-sm text-gray-400 mb-1">aproveitamento</span>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        
+        {/* Main Score Card */}
+        <div className="md:col-span-2 bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-lg border border-gray-100 dark:border-gray-700 relative overflow-hidden flex items-center justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-bl-full -mr-6 -mt-6"></div>
+          <div>
+             <p className="text-gray-400 dark:text-gray-500 text-sm font-bold uppercase tracking-wider mb-2">Seu Aproveitamento</p>
+             <h3 className={`text-6xl font-extrabold tracking-tighter ${
+               percentage >= 70 ? 'text-green-500' : percentage >= 50 ? 'text-amber-500' : 'text-red-500'
+             }`}>
+               {percentage}%
+             </h3>
+             <p className="text-sm text-gray-500 mt-2 font-medium">
+               {percentage >= 80 ? 'Excelente! Você está voando!' : percentage >= 50 ? 'Bom trabalho, continue melhorando.' : 'Atenção, vamos reforçar os estudos.'}
+             </p>
           </div>
-          <Award className="absolute right-6 top-6 w-8 h-8 text-blue-500 opacity-50" />
+          <div className="hidden sm:block h-24 w-24">
+             <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pieData} innerRadius={35} outerRadius={45} dataKey="value" stroke="none">
+                    <Cell key="correct" fill={COLORS.correct} />
+                    <Cell key="incorrect" fill={COLORS.incorrect} />
+                  </Pie>
+                </PieChart>
+             </ResponsiveContainer>
+          </div>
         </div>
 
-        {/* Correct/Total Card */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-green-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-          <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Acertos</p>
-          <div className="flex items-end space-x-2">
-            <h3 className="text-4xl font-extrabold text-green-600 dark:text-green-400">{correctCount}</h3>
-            <span className="text-sm text-gray-400 mb-1">de {answers.length} questões</span>
-          </div>
-          <Target className="absolute right-6 top-6 w-8 h-8 text-green-500 opacity-50" />
+        {/* Detailed Stats */}
+        <div className="md:col-span-2 grid grid-cols-2 gap-4">
+           <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-3xl flex flex-col justify-center border border-green-100 dark:border-green-800/30">
+              <div className="bg-white dark:bg-green-800/50 w-10 h-10 rounded-full flex items-center justify-center mb-3 shadow-sm">
+                <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-300" />
+              </div>
+              <p className="text-3xl font-bold text-green-700 dark:text-green-300">{correctCount}</p>
+              <p className="text-xs font-bold uppercase text-green-600/70 dark:text-green-400">Acertos</p>
+           </div>
+           
+           <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-3xl flex flex-col justify-center border border-red-100 dark:border-red-800/30">
+              <div className="bg-white dark:bg-red-800/50 w-10 h-10 rounded-full flex items-center justify-center mb-3 shadow-sm">
+                <XCircle className="w-5 h-5 text-red-600 dark:text-red-300" />
+              </div>
+              <p className="text-3xl font-bold text-red-700 dark:text-red-300">{incorrectCount}</p>
+              <p className="text-xs font-bold uppercase text-red-600/70 dark:text-red-400">Erros</p>
+           </div>
+
+           <div className="col-span-2 bg-white dark:bg-gray-800 p-5 rounded-3xl flex items-center justify-between shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center">
+                 <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl mr-4">
+                    <Clock className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                 </div>
+                 <div>
+                    <p className="text-xl font-bold text-gray-800 dark:text-white">{formatDuration(totalTimeSeconds)}</p>
+                    <p className="text-xs text-gray-500 uppercase font-bold">Tempo Total</p>
+                 </div>
+              </div>
+              <div className="text-right border-l pl-6 border-gray-100 dark:border-gray-700">
+                 <p className="text-lg font-bold text-gray-800 dark:text-white">{avgTime}s</p>
+                 <p className="text-xs text-gray-500 uppercase font-bold">Média / Questão</p>
+              </div>
+           </div>
         </div>
 
-        {/* Time Card */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
-           <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-          <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Tempo do Simulado</p>
-          <div className="flex items-end space-x-2">
-            <h3 className="text-4xl font-extrabold text-gray-800 dark:text-white">{formatDuration(totalTimeSeconds)}</h3>
-          </div>
-          <p className="text-xs text-gray-400 mt-1">Média: {avgTime}s / questão</p>
-          <Clock className="absolute right-6 top-6 w-8 h-8 text-purple-500 opacity-50" />
-        </div>
-
-        {/* Action Card */}
-        <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-2xl shadow-lg flex flex-col justify-center items-center text-center">
-             <h4 className="text-white font-bold mb-3 text-sm">Pronto para o próximo?</h4>
-             <button onClick={onRestart} className="w-full bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-4 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5">
-                Voltar ao Início
-             </button>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left Column: Charts */}
-        <div className="lg:col-span-2 space-y-8">
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-             {/* Donut Chart */}
-             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-               <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4 text-center">Resumo</h3>
-               <div className="h-64 w-full relative">
-                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      <Cell key="cell-correct" fill={COLORS.correct} />
-                      <Cell key="cell-incorrect" fill={COLORS.incorrect} />
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle"/>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="text-center">
-                    <span className="block text-3xl font-bold text-gray-800 dark:text-white">{Math.round((correctCount / answers.length) * 100)}%</span>
-                  </div>
-                </div>
-               </div>
-             </div>
-
-             {/* Topic Performance */}
-             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center justify-center">
-                  <Layers className="w-5 h-5 mr-2 text-indigo-500" />
-                  Matérias
-                </h3>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      layout="vertical"
-                      data={topicData}
-                      margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#374151" opacity={0.2} />
-                      <XAxis type="number" hide />
-                      <YAxis 
-                        dataKey="name" 
-                        type="category" 
-                        width={100} 
-                        tick={{ fill: '#6B7280', fontSize: 11 }} 
-                        interval={0}
-                      />
-                      <Tooltip content={<CustomTooltip />} cursor={{fill: 'transparent'}} />
-                      <Bar dataKey="Acertos" stackId="a" fill={COLORS.correct} radius={[0, 4, 4, 0]} barSize={20} />
-                      <Bar dataKey="Erros" stackId="a" fill="#E5E7EB" radius={[0, 4, 4, 0]} barSize={20} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-             </div>
-          </div>
-
-          {/* History */}
-          {history.length > 0 && (
-            <div className="space-y-6">
-              <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold opacity-90">Total de Horas</h3>
-                </div>
-                <div className="text-right">
-                  <div className="text-4xl font-bold flex items-center gap-2">
-                    <Hourglass className="w-8 h-8 opacity-80" />
-                    {formatDuration(totalLifetimeSeconds)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-6 flex items-center">
-                    <TrendingUp className="w-5 h-5 mr-2 text-blue-500" />
-                    Evolução
-                  </h3>
-                  <div className="h-60 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={historyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} vertical={false} />
-                        <XAxis dataKey="date" stroke="#9CA3AF" tick={{fontSize: 10}} tickLine={false} axisLine={false} dy={10} />
-                        <YAxis domain={[0, 100]} stroke="#9CA3AF" tickLine={false} axisLine={false} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Line 
-                          type="monotone" 
-                          dataKey="nota" 
-                          stroke="#3B82F6" 
-                          strokeWidth={3} 
-                          dot={{r: 4, fill: '#3B82F6', strokeWidth: 2, stroke: '#fff'}} 
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-6 flex items-center">
-                    <Calendar className="w-5 h-5 mr-2 text-purple-500" />
-                    Tempo (min)
-                  </h3>
-                  <div className="h-60 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={historyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorTime" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} vertical={false} />
-                        <XAxis dataKey="date" stroke="#9CA3AF" tick={{fontSize: 10}} tickLine={false} axisLine={false} dy={10} />
-                        <YAxis stroke="#9CA3AF" tickLine={false} axisLine={false} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Area 
-                          type="monotone" 
-                          dataKey="minutos" 
-                          stroke="#8B5CF6" 
-                          fillOpacity={1} 
-                          fill="url(#colorTime)" 
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column: Analysis */}
+        {/* --- SECTION 2: AI ANALYSIS (Coach) --- */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 h-full flex flex-col">
-            <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6 flex items-center border-b border-gray-100 dark:border-gray-700 pb-4">
-              <BookOpen className="w-6 h-6 mr-2 text-blue-600 dark:text-blue-400" />
-              Análise Estratégica
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-lg border border-gray-100 dark:border-gray-700 h-full flex flex-col">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6 flex items-center border-b border-gray-100 dark:border-gray-700 pb-4">
+              <BookOpen className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
+              Análise do Treinador IA
             </h3>
             
             {analysis ? (
               <div className="space-y-6 overflow-y-auto flex-1 custom-scrollbar pr-2">
-                <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-200 dark:border-amber-700/30">
-                  <h4 className="font-bold text-amber-800 dark:text-amber-200 flex items-center mb-3 text-sm uppercase tracking-wide">
-                    <AlertTriangle className="w-4 h-4 mr-2" />
-                    Padrão {profile.banca}
+                <div className="bg-indigo-50 dark:bg-indigo-900/10 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-700/30">
+                  <h4 className="font-bold text-indigo-800 dark:text-indigo-200 mb-2 text-xs uppercase tracking-wide flex items-center">
+                     <Target className="w-3 h-3 mr-1" />
+                     Plano de Ação Recomendado
+                  </h4>
+                  <p className="text-sm text-indigo-900 dark:text-indigo-100 leading-relaxed whitespace-pre-wrap font-medium">
+                    {analysis.recommendations}
+                  </p>
+                </div>
+
+                <div className="bg-amber-50 dark:bg-amber-900/10 p-5 rounded-2xl border border-amber-100 dark:border-amber-700/30">
+                  <h4 className="font-bold text-amber-800 dark:text-amber-200 flex items-center mb-2 text-xs uppercase tracking-wide">
+                    <AlertTriangle className="w-3 h-3 mr-1" />
+                    Padrão da Banca Identificado
                   </h4>
                   <p className="text-sm text-amber-900 dark:text-amber-100 leading-relaxed whitespace-pre-wrap">
                     {analysis.bancaPattern}
                   </p>
                 </div>
 
-                <div className="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-200 dark:border-indigo-700/30">
-                  <h4 className="font-bold text-indigo-800 dark:text-indigo-200 mb-3 text-sm uppercase tracking-wide">
-                    Plano de Estudo
-                  </h4>
-                  <p className="text-sm text-indigo-900 dark:text-indigo-100 leading-relaxed whitespace-pre-wrap">
-                    {analysis.recommendations}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-4">
                    <div>
-                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Pontos Fortes</h4>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Pontos Fortes</h4>
                     <div className="flex flex-wrap gap-2">
                       {analysis.strengths.length > 0 ? analysis.strengths.map((s, i) => (
                         <span key={i} className="px-3 py-1 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-full text-xs font-semibold border border-green-200 dark:border-green-800">
@@ -379,7 +263,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                    </div>
 
                    <div>
-                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Atenção (Pontos Fracos)</h4>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Pontos a Melhorar</h4>
                     <div className="flex flex-wrap gap-2">
                       {analysis.weaknesses.length > 0 ? analysis.weaknesses.map((w, i) => (
                         <span key={i} className="px-3 py-1 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-full text-xs font-semibold border border-red-200 dark:border-red-800">
@@ -399,13 +283,89 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
                  </div>
                  <div className="text-center space-y-2">
                    <p className="font-medium text-gray-600 dark:text-gray-300">Consultando a IA...</p>
-                   <p className="text-xs max-w-[200px] mx-auto">Analisando o padrão da banca {profile.banca}...</p>
+                   <p className="text-xs max-w-[200px] mx-auto opacity-70">Analisando o padrão da banca {profile.banca} e seu desempenho...</p>
                  </div>
                </div>
             )}
           </div>
         </div>
+
+        {/* --- SECTION 3: GRAPHS & HISTORY --- */}
+        <div className="lg:col-span-2 space-y-6">
+          
+             {/* Topic Performance Bar Chart */}
+             <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center">
+                  <Layers className="w-5 h-5 mr-2 text-indigo-500" />
+                  Desempenho por Matéria (Neste Simulado)
+                </h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={topicData}
+                      margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#374151" opacity={0.1} />
+                      <XAxis type="number" hide />
+                      <YAxis 
+                        dataKey="name" 
+                        type="category" 
+                        width={100} 
+                        tick={{ fill: '#6B7280', fontSize: 11, fontWeight: 500 }} 
+                        interval={0}
+                      />
+                      <Tooltip content={<CustomTooltip />} cursor={{fill: 'transparent'}} />
+                      <Bar dataKey="Acertos" stackId="a" fill={COLORS.correct} radius={[0, 4, 4, 0]} barSize={20} />
+                      <Bar dataKey="Erros" stackId="a" fill="#E5E7EB" radius={[0, 4, 4, 0]} barSize={20} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+             </div>
+
+          {/* Evolution Chart (History) */}
+          {history.length > 1 && (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-6 flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2 text-blue-500" />
+                Sua Evolução no Tempo
+              </h3>
+              <div className="h-60 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={historyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorNota" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} vertical={false} />
+                    <XAxis dataKey="date" stroke="#9CA3AF" tick={{fontSize: 10}} tickLine={false} axisLine={false} dy={10} />
+                    <YAxis domain={[0, 100]} stroke="#9CA3AF" tickLine={false} axisLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area 
+                      type="monotone" 
+                      dataKey="nota" 
+                      stroke="#3B82F6" 
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#colorNota)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+      
+      {/* Bottom Action */}
+      <div className="flex justify-center mt-8">
+         <button onClick={onRestart} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-2xl shadow-xl shadow-indigo-500/30 transition-all transform hover:-translate-y-1 text-lg">
+            Voltar ao Início e Praticar Mais
+         </button>
+      </div>
+
     </div>
   );
 };
