@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppView, Question, AnswerAttempt, UploadedFile, ExamProfile, StrategicAnalysis, HistoryItem } from './types';
-import UploadSection from './components/UploadSection';
+import Dashboard from './components/Dashboard';
+import ExamCreationView from './components/ExamCreationView';
 import QuizInterface from './components/QuizInterface';
 import ResultsView from './components/ResultsView';
 import { generateQuestions, analyzePerformanceAndPattern } from './services/geminiService';
@@ -265,10 +266,18 @@ const App: React.FC = () => {
         )}
 
         {view === AppView.HOME && (
-          <UploadSection 
-            onStart={handleStartQuiz} 
+          <Dashboard 
+            onCreateExam={() => setView(AppView.CREATE_EXAM)} 
             onStartReview={handleStartReview}
             onViewHistory={handleViewHistory}
+            isLoading={loading}
+          />
+        )}
+
+        {view === AppView.CREATE_EXAM && (
+          <ExamCreationView
+            onStart={handleStartQuiz}
+            onCancel={() => setView(AppView.HOME)}
             isLoading={loading}
             onError={(msg) => addToast(msg, 'error')}
           />

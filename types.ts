@@ -40,6 +40,7 @@ export interface UploadedFile {
 
 export enum AppView {
   HOME = 'HOME',
+  CREATE_EXAM = 'CREATE_EXAM',
   QUIZ = 'QUIZ',
   RESULTS = 'RESULTS',
   LOADING = 'LOADING',
