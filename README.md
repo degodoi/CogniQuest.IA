@@ -1,8 +1,3 @@
-<ArtifactMetadata>
-  <ArtifactType>other</ArtifactType>
-  <Summary>README</Summary>
-</ArtifactMetadata>
-
 <div align="center">
   <img src="https://i.imgur.com/u4zNkcu.png" alt="CogniQuest Logo" width="120" />
   <h1>🧠 CogniQuest.IA</h1>
