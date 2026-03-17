@@ -1,6 +1,6 @@
 <ArtifactMetadata>
   <ArtifactType>other</ArtifactType>
-  <Summary>Updated README.md to be more visual, structured, and professional.</Summary>
+  <Summary>README</Summary>
 </ArtifactMetadata>
 
 <div align="center">
