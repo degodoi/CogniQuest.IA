@@ -4,7 +4,7 @@
 </ArtifactMetadata>
 
 <div align="center">
-  <img src="https://via.placeholder.com/150/4f46e5/ffffff?text=CogniQuest" alt="CogniQuest Logo" width="120" />
+  <img src="https://i.imgur.com/u4zNkcu.png" alt="CogniQuest Logo" width="120" />
   <h1>🧠 CogniQuest.IA</h1>
   <p><strong>Sistema Avançado de Preparação para Concursos (Multi-Banca)</strong></p>
   <p>Desenvolvido por <strong>Marcos Felipe</strong></p>
