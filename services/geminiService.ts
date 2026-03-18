@@ -155,14 +155,17 @@ export const generateQuestions = async (
         try {
           // Dynamic System Instruction with Explicit Distribution Rules AND Search Strategy
           let systemInstruction = `
-            Você é um examinador sênior hiper-exigente${profile.banca ? ` da banca '${profile.banca}'` : ''}, criando uma prova simulada com ALTO RIGOR COGNITIVO${profile.cargo ? ` para o cargo de '${profile.cargo}'` : ''} (Nível ${profile.escolaridade}).
+            Você é um examinador sênior e especializado na elaboração de provas de concursos públicos.
+            Você representa ESTRITAMENTE a banca organizadora: '${profile.banca || 'Banca Padrão de Concursos'}'.
+            Sua missão é criar uma avaliação REALISTA e de ALTO NÍVEL para o cargo de: '${profile.cargo || 'Diversos'}' (Escolaridade: ${profile.escolaridade}).
             
-            SUA MISSÃO:
-            1. Gerar/Extrair ${isAutomaticMode ? `exatamente ${questionsInBatch} questões para este lote` : `TODAS AS QUESTÕES do arquivo, em volume máximo possível`}.
-            2. DISTRIBUIÇÃO E CONTEÚDO OBRIGATÓRIOS:
+            DIRETRIZES INEGOCIÁVEIS:
+            1. ABORTE O PADRÃO GENÉRICO: Proibido criar questões bobas, óbvias ou curtas demais. Use textos de apoio documentais, situações-problema elaboradas ou jurisprudência (se aplicável ao cargo). As questões DEVEM se passar por questões reais de concursos anteriores da banca ${profile.banca || 'solicitada'}.
+            2. QUANTIDADE: Gerar/Extrair ${isAutomaticMode ? `exatamente ${questionsInBatch} questões para este lote` : `TODAS AS QUESTÕES do arquivo, em volume máximo possível`}.
+            3. DISTRIBUIÇÃO OBRIGATÓRIA:
                ${distributionString}
-            3. ESTRATÉGIA DESTE LOTE: ${currentStrategy}
-            4. NÍVEL DE DIFICULDADE E REALISMO: A dificuldade deve refletir ESTRITAMENTE a realidade do cargo e escolaridade. Seja extremamente fidedigno à formatação e pegadinhas da banca pretendida (ou estilo de concurso caso banca em branco).
+            4. ESTRATÉGIA DESTE LOTE: ${currentStrategy}
+            5. FORMATAÇÃO E ESTILO: Emule 100% o estilo da banca '${profile.banca || 'padrão'}'. Se ela usa pegadinhas específicas, use-as. Se usa textos longos, use-os. O rigor cognitivo deve ser EXATAMENTE o do cargo de '${profile.cargo || 'nível '+profile.escolaridade}'.
 
           `;
 
@@ -180,9 +183,9 @@ export const generateQuestions = async (
           }
 
           let prompt = isAutomaticMode 
-            ? `Gere ${questionsInBatch} questões altamente relevantes e aderentes ao nível.${profile.cargo ? ` Cargo: ${profile.cargo}.` : ''}`
+            ? `Crie ${questionsInBatch} questões inéditas ou adaptadas, idênticas às aplicadas em provas reais da banca ${profile.banca || 'organizadora'} para o cargo de ${profile.cargo || 'concurso geral'} (${profile.escolaridade}). NÃO gere questões óbvias.`
             : `Extraia TODAS as questões do PDF anexo. Ignore as limitações e leia completamente o documento.`;
-          prompt += `\nContexto de Busca: ${currentStrategy}`;
+          prompt += `\nContexto de Busca/Enfoque: ${currentStrategy}`;
           
           if (extraContext) {
             prompt += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este pedido acima de qualquer outra regra genérica.`;

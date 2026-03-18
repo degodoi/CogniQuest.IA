@@ -100,6 +100,7 @@ const ExamCreationView: React.FC<ExamCreationViewProps> = ({ onStart, onCancel, 
               };
               reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
             });
+            reader.readAsDataURL(file);
             const pFile = await filePromise;
             await saveFile(pFile);
           } catch (err) {
