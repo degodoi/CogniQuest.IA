@@ -131,11 +131,20 @@ export const generateQuestions = async (
        const countMat = Math.max(1, Math.floor(qBatchNum * 0.2));
        const countSpec = qBatchNum - countPT - countMat;
 
-       distributionString = `
+       if (extraContext) {
+           distributionString = `
+         - ATENÇÃO OBRIGATÓRIA: O usuário forneceu um pedido específico para os temas das questões.
+         - GERE TODAS AS QUESTÕES (${qBatchNum}) FOCADAS EXCLUSIVAMENTE NO PEDIDO DO USUÁRIO.
+         - NÃO CRIE questões de Português, Matemática ou Conhecimentos Específicos genéricos, a menos que o usuário tenha pedido expressamente.
+         - Mantenha o formato e a dificuldade exigidas para o cargo (${profile.cargo || 'geral'}).
+       `;
+       } else {
+           distributionString = `
          - ${countPT} questões de Língua Portuguesa (NÍVEL EXATO do cargo de ${profile.cargo || 'geral'})
          - ${countMat} questões de Matemática/Raciocínio Lógico (NÍVEL ADEQUADO: estritamente o nível real cobrado para o cargo, ABORTE criar questões matemáticas imbecis ou genéricas do tipo regra de 3 se o cargo exigir mais complexidade)
          - ${countSpec} questões de Conhecimentos Específicos do Cargo/Legislação pertinente
        `;
+       }
     }
 
     // Rotate strategies based on batch index to ensure variety across the whole exam
