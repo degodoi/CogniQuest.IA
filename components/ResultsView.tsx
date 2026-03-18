@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { AnswerAttempt, Question, StrategicAnalysis, ExamProfile, HistoryItem } from '../types';
 import { saveHistory, getHistory, saveErrorQuestion, removeErrorQuestion } from '../services/storageService';
+import { addXp } from '../services/userService';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, AreaChart, Area } from 'recharts';
-import { AlertTriangle, Award, BookOpen, Clock, Target, TrendingUp, Layers, Hourglass, Calendar, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, Award, BookOpen, Clock, Target, TrendingUp, Layers, Hourglass, Calendar, CheckCircle2, XCircle, Download } from 'lucide-react';
 
 interface ResultsViewProps {
   answers: AnswerAttempt[];
@@ -78,6 +79,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
         
         const h = await getHistory();
         setHistory(h);
+        
+        // Award XP
+        addXp(correctCount * 10);
 
         let errorsSaved = 0;
         for (const answer of answers) {
@@ -148,9 +152,19 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
       )}
 
       {/* --- SECTION 1: SESSION SUMMARY (Immediate Feedback) --- */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-6 relative">
         <h2 className="text-3xl font-extrabold text-gray-800 dark:text-white tracking-tight">Resultado do Simulado</h2>
         <p className="text-gray-500 font-medium">{profile.cargo} • {profile.banca}</p>
+        
+        {/* PDF Export Button */}
+        <button 
+          onClick={() => window.print()} 
+          className="print:hidden absolute right-0 top-0 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 p-2 rounded-lg flex items-center font-semibold transition-colors"
+          title="Exportar para PDF / Imprimir"
+        >
+          <Download className="w-5 h-5 md:mr-2" />
+          <span className="hidden md:inline">Exportar PDF</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -360,7 +374,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
       </div>
       
       {/* Bottom Action */}
-      <div className="flex justify-center mt-8">
+      <div className="flex justify-center mt-8 print:hidden">
          <button onClick={onRestart} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-2xl shadow-xl shadow-indigo-500/30 transition-all transform hover:-translate-y-1 text-lg">
             Voltar ao Início e Praticar Mais
          </button>

@@ -49,6 +49,46 @@ const QuizInterface: React.FC<QuizInterfaceProps> = ({ questions, onComplete }) 
     };
   }, [currentIndex]);
 
+  // Keyboard Accessibility
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isChatOpen) return;
+      
+      const key = e.key.toLowerCase();
+      
+      // Shortcuts A, B, C, D, E
+      const keyMap: Record<string, number> = { 'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, '1': 0, '2': 1, '3': 2, '4': 3, '5': 4 };
+      if (!showExplanation && key in keyMap) {
+        const idx = keyMap[key];
+        if (idx < currentQuestion.options.length) {
+          setSelectedOption(idx);
+        }
+      }
+      
+      // Arrow navigation
+      if (!showExplanation && key === 'arrowdown') {
+        e.preventDefault();
+        setSelectedOption(prev => prev === null ? 0 : Math.min(prev + 1, currentQuestion.options.length - 1));
+      } else if (!showExplanation && key === 'arrowup') {
+        e.preventDefault();
+        setSelectedOption(prev => prev === null ? currentQuestion.options.length - 1 : Math.max(prev - 1, 0));
+      }
+      
+      // Enter to confirm or next
+      if (key === 'enter') {
+        e.preventDefault();
+        if (!showExplanation && selectedOption !== null) {
+          handleConfirm();
+        } else if (showExplanation) {
+          handleNext();
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
+
   // Scroll to bottom of chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });

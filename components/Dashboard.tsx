@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Question, HistoryItem } from '../types';
 import { getErrorQuestions, getHistory } from '../services/storageService';
-import { BookOpen, BrainCircuit, Play, Flame, History, Trophy, Target, Clock, TrendingUp, Lightbulb, ListOrdered, Calendar } from 'lucide-react';
+import { BookOpen, BrainCircuit, Play, Flame, History, Trophy, Target, Clock, TrendingUp, Lightbulb, ListOrdered, Calendar, Star } from 'lucide-react';
+import { getUserStats, calculateLevel } from '../services/userService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 
 interface DashboardProps {
@@ -22,10 +23,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateExam, onStartReview, onVi
   const [recentHistory, setRecentHistory] = useState<HistoryItem[]>([]);
   const [allHistory, setAllHistory] = useState<HistoryItem[]>([]); 
   const [streak, setStreak] = useState(0);
+  const [xp, setXp] = useState(0);
+  const [level, setLevel] = useState(1);
 
   useEffect(() => {
     loadData();
-    calculateStreak();
+    const stats = getUserStats();
+    setStreak(stats.streak);
+    setXp(stats.xp);
+    setLevel(calculateLevel(stats.xp));
   }, []);
 
   const loadData = async () => {
@@ -40,59 +46,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateExam, onStartReview, onVi
     }
   };
 
-  const calculateStreak = () => {
-    const lastStudy = localStorage.getItem('lastStudyDate');
-    const currentStreak = parseInt(localStorage.getItem('studyStreak') || '0', 10);
-    
-    if (lastStudy) {
-      const lastDate = new Date(parseInt(lastStudy));
-      const today = new Date();
-      lastDate.setHours(0,0,0,0);
-      today.setHours(0,0,0,0);
-
-      const diffTime = Math.abs(today.getTime() - lastDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays <= 1) {
-        setStreak(currentStreak);
-      } else {
-        setStreak(0);
-        localStorage.setItem('studyStreak', '0');
-      }
-    } else {
-      setStreak(0);
-    }
-  };
-
-  const updateStreakOnStart = () => {
-    const lastStudy = localStorage.getItem('lastStudyDate');
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    
-    let newStreak = parseInt(localStorage.getItem('studyStreak') || '0', 10);
-
-    if (lastStudy) {
-      const lastDate = new Date(parseInt(lastStudy));
-      lastDate.setHours(0,0,0,0);
-      const diffTime = Math.abs(today.getTime() - lastDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 1) {
-        newStreak += 1;
-      } else if (diffDays > 1) {
-        newStreak = 1; 
-      }
-    } else {
-      newStreak = 1; 
-    }
-
-    localStorage.setItem('lastStudyDate', Date.now().toString());
-    localStorage.setItem('studyStreak', newStreak.toString());
-    setStreak(newStreak);
-  };
-
   const handleReviewWrapper = () => {
-    updateStreakOnStart();
     onStartReview(errorQuestions);
   };
 
@@ -199,7 +153,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateExam, onStartReview, onVi
             </div>
          </div>
          
-         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-6 py-3 rounded-2xl flex items-center shadow-sm">
+         <div className="flex flex-wrap items-center gap-4 justify-end mt-4 md:mt-0">
+            {/* XP / Level Badge */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-6 py-3 rounded-2xl flex items-center shadow-sm">
+               <div className="p-2 rounded-full mr-4 bg-yellow-100 text-yellow-600">
+                 <Star className="w-6 h-6" fill="currentColor" />
+               </div>
+               <div>
+                 <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">Level {level}</p>
+                 <div className="flex items-baseline">
+                   <p className="text-2xl font-bold text-gray-800 dark:text-white mr-1">{xp}</p>
+                   <span className="text-sm text-gray-500">XP</span>
+                 </div>
+               </div>
+            </div>
+         
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-6 py-3 rounded-2xl flex items-center shadow-sm">
             <div className={`p-2 rounded-full mr-4 ${streak > 0 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
               <Flame className="w-6 h-6" />
             </div>
@@ -209,6 +178,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateExam, onStartReview, onVi
                 <p className="text-2xl font-bold text-gray-800 dark:text-white mr-1">{streak}</p>
                 <span className="text-sm text-gray-500">dias</span>
               </div>
+            </div>
             </div>
          </div>
       </div>

@@ -69,3 +69,9 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
 }
+
+export interface UserStats {
+  xp: number;
+  streak: number;
+  lastStudyDate: string;
+}
