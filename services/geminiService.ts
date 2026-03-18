@@ -116,18 +116,23 @@ export const generateQuestions = async (
       ? totalQuestions % batchSize 
       : batchSize;
 
-    // Explicitly calculate distribution for this batch to ensure variety
-    // Target: 30% Portuguese, 20% Math/Logic, 50% Specific
-    const countPT = Math.max(1, Math.floor(questionsInBatch * 0.3));
-    const countMat = Math.max(1, Math.floor(questionsInBatch * 0.2));
-    // Ensure the remainder goes to Specifics so the sum equals questionsInBatch
-    const countSpec = questionsInBatch - countPT - countMat;
+    let distributionString = "";
+    if (files.length > 0) {
+       distributionString = `
+         - EXTRAIA ou CRIE as ${questionsInBatch} questões ESTRITAMENTE baseando-se com exclusividade no conteúdo dos arquivos anexos fornecidos.
+         - NÃO INVENTE matérias ou assuntos genéricos que não constam categoricamente no arquivo enviado.
+       `;
+    } else {
+       const countPT = Math.max(1, Math.floor(questionsInBatch * 0.3));
+       const countMat = Math.max(1, Math.floor(questionsInBatch * 0.2));
+       const countSpec = questionsInBatch - countPT - countMat;
 
-    const distributionString = `
-      - ${countPT} questões de Língua Portuguesa
-      - ${countMat} questões de Matemática ou Raciocínio Lógico
-      - ${countSpec} questões de Conhecimentos Específicos do Cargo/Legislação
-    `;
+       distributionString = `
+         - ${countPT} questões de Língua Portuguesa (NÍVEL EXATO do cargo de ${profile.cargo || 'geral'})
+         - ${countMat} questões de Matemática/Raciocínio Lógico (NÍVEL ADEQUADO: estritamente o nível real cobrado para o cargo, ABORTE criar questões matemáticas imbecis ou genéricas do tipo regra de 3 se o cargo exigir mais complexidade)
+         - ${countSpec} questões de Conhecimentos Específicos do Cargo/Legislação pertinente
+       `;
+    }
 
     // Rotate strategies based on batch index to ensure variety across the whole exam
     const currentStrategy = searchStrategies[i % searchStrategies.length];
@@ -137,34 +142,35 @@ export const generateQuestions = async (
         try {
           // Dynamic System Instruction with Explicit Distribution Rules AND Search Strategy
           let systemInstruction = `
-            Você é um examinador sênior${profile.banca ? ` da banca '${profile.banca}'` : ''}, criando uma prova simulada${profile.cargo ? ` para o cargo de '${profile.cargo}'` : ''} (Nível ${profile.escolaridade}).
+            Você é um examinador sênior hiper-exigente${profile.banca ? ` da banca '${profile.banca}'` : ''}, criando uma prova simulada com ALTO RIGOR COGNITIVO${profile.cargo ? ` para o cargo de '${profile.cargo}'` : ''} (Nível ${profile.escolaridade}).
             
             SUA MISSÃO:
             1. Gerar exatamente ${questionsInBatch} questões para este lote.
-            2. OBRIGATÓRIO SEGUIR ESTA DISTRIBUIÇÃO:
+            2. DISTRIBUIÇÃO E CONTEÚDO OBRIGATÓRIOS:
                ${distributionString}
             3. ESTRATÉGIA DESTE LOTE: ${currentStrategy}
-            4. INSTRUÇÃO DE BUSCA: Não se limite a uma única fonte. Varra a internet por provas anteriores, fóruns de concurso e sites especializados para trazer diversidade.
-            5. Estilo: Imite o estilo ${profile.banca ? `da banca '${profile.banca}'` : 'padrão de concursos'} (tamanho do texto, vocabulário).
+            4. NÍVEL DE DIFICULDADE E REALISMO: A dificuldade deve refletir ESTRITAMENTE a realidade do cargo e escolaridade. Seja extremamente fidedigno à formatação e pegadinhas da banca pretendida (ou estilo de concurso caso banca em branco).
+
           `;
 
-          if (isAutomaticMode) {
-            systemInstruction += `\nMODO AUTOMÁTICO: Use o 'googleSearch' agressivamente para validar o conteúdo programático real.`;
+          if (files.length > 0) {
+             systemInstruction += `\n5. REGRA DE OURO SOBRE ARQUIVOS PDF: 
+             - MATERIAL FORNECIDO! Seus dados devem vir DO ARQUIVO.
+             - Se for uma prova anterior, copie e EXTRAIA as questões exatamente de lá, formatando-as em JSON.
+             - Se for apostila de estudo, faça questões focadas e limitadas EXCLUSIVAMENTE ao conteúdo ali demonstrado. NUNCA gere perguntas de temas alheios ao conteúdo.`;
+          } else if (isAutomaticMode) {
+            systemInstruction += `\n5. MODO AUTOMÁTICO DE BUSCA: Use o 'googleSearch' agressivamente para validar matérias, encontrar o edital real do cargo e provas passadas recentes.`;
           }
 
           if (extraContext) {
              systemInstruction += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
           }
 
-          let prompt = `Gere ${questionsInBatch} questões (${countPT} Port, ${countMat} Mat, ${countSpec} Específicas).${profile.cargo ? ` Cargo: ${profile.cargo}.` : ''}`;
+          let prompt = `Gere ${questionsInBatch} questões altamentes relevantes e aderentes ao nível.${profile.cargo ? ` Cargo: ${profile.cargo}.` : ''}`;
           prompt += `\nContexto de Busca: ${currentStrategy}`;
           
           if (extraContext) {
-            prompt += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
-          }
-          
-          if (files.length > 0) {
-            prompt += `\nINSTRUÇÃO SOBRE ARQUIVOS: Use os arquivos anexos como base prioritária, mas use seu conhecimento da banca para preencher lacunas de matérias que não estejam nos arquivos.`;
+            prompt += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este pedido acima de qualquer outra regra genérica.`;
           }
 
           const parts: any[] = [{ text: prompt }];
@@ -206,11 +212,11 @@ export const generateQuestions = async (
           // Fallback Strategy: No Search, Standard Prompt
           try {
             let fallbackInstruction = `
-              Você é um especialista${profile.banca ? ` na banca ${profile.banca}` : ''}.
-              Crie uma prova${profile.cargo ? ` para ${profile.cargo}` : ''} (${profile.escolaridade}).
+              Você é um examinador hiper-rigoroso${profile.banca ? ` da banca ${profile.banca}` : ''}.
+              Crie uma prova${profile.cargo ? ` para ${profile.cargo}` : ''} (Nível: ${profile.escolaridade}).
               Gere EXATAMENTE:
               ${distributionString}
-              Retorne APENAS JSON.
+              Retorne APENAS JSON válido, focado de forma estrita no nível de dificuldade exigido.
             `;
             
             if (extraContext) {
