@@ -241,20 +241,25 @@ const ExamCreationView: React.FC<ExamCreationViewProps> = ({ onStart, onCancel, 
             </div>
 
             {storedFiles.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-                  {storedFiles.map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 group">
-                      <div className="flex items-center space-x-3 overflow-hidden">
-                        <FileText className="w-5 h-5 text-indigo-400 flex-shrink-0" />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">{file.name}</span>
+              <div className="mt-4 mb-4">
+                <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400 mb-3 flex items-center">
+                   <FileText className="w-4 h-4 mr-1.5"/> Arquivos Anexados ({storedFiles.length})
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {storedFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-indigo-50 dark:bg-gray-800/80 rounded-xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm">
+                        <div className="flex items-center space-x-3 overflow-hidden">
+                          <FileText className="w-5 h-5 text-indigo-500 flex-shrink-0" />
+                          <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{file.name}</span>
+                        </div>
+                        {file.id && (
+                          <button onClick={() => handleRemoveFile(file.id!)} className="text-red-400 hover:text-red-600 dark:hover:text-red-400 transition ml-2 p-1 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-lg" title="Remover arquivo">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
-                      {file.id && (
-                        <button onClick={() => handleRemoveFile(file.id!)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition opacity-0 group-hover:opacity-100 p-1">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                </div>
               </div>
             )}
           </div>

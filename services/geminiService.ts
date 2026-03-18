@@ -96,9 +96,10 @@ export const generateQuestions = async (
 
   // Use the selected count from profile, default to 10 if missing
   const totalQuestions = profile.qCount || 10;
-  const batchSize = 10;
-  // Calculate batches needed (e.g. 20 q / 10 = 2 batches)
-  const batches = Math.ceil(totalQuestions / batchSize);
+  
+  // Se for automático, dividimos em batches de 10. Se enviar PDF, faz 1 batch único.
+  const batchSize = isAutomaticMode ? 10 : 250; 
+  const batches = isAutomaticMode ? Math.ceil(totalQuestions / batchSize) : 1;
   
   // Strategy Definitions for Broader Search
   const searchStrategies = [
@@ -112,20 +113,23 @@ export const generateQuestions = async (
 
   for (let i = 0; i < batches; i++) {
     // Determine questions for this specific batch (handles the last partial batch if any)
-    const questionsInBatch = (i === batches - 1 && totalQuestions % batchSize !== 0) 
-      ? totalQuestions % batchSize 
-      : batchSize;
+    const questionsInBatch = isAutomaticMode 
+      ? ((i === batches - 1 && totalQuestions % batchSize !== 0) ? totalQuestions % batchSize : batchSize)
+      : "TODAS";
 
     let distributionString = "";
-    if (files.length > 0) {
+    if (!isAutomaticMode) {
        distributionString = `
-         - EXTRAIA ou CRIE as ${questionsInBatch} questões ESTRITAMENTE baseando-se com exclusividade no conteúdo dos arquivos anexos fornecidos.
-         - NÃO INVENTE matérias ou assuntos genéricos que não constam categoricamente no arquivo enviado.
+         - EXTRAIA EXATAMENTE TODAS as questões que estiverem presentes nos arquivos anexos.
+         - IGNORE qualquer limite numérico programado na geração. Se o PDF tiver 5 questões, extraia 5. Se tiver 100, extraia 100.
+         - Se o PDF for um texto base/teoria sem questões prontas, crie TODAS as questões possíveis que cobrem de ponta a ponta o documento de forma minuciosa.
+         - NÃO INVENTE matérias ou assuntos genéricos que não constam no arquivo enviado.
        `;
     } else {
-       const countPT = Math.max(1, Math.floor(questionsInBatch * 0.3));
-       const countMat = Math.max(1, Math.floor(questionsInBatch * 0.2));
-       const countSpec = questionsInBatch - countPT - countMat;
+       const qBatchNum = questionsInBatch as number;
+       const countPT = Math.max(1, Math.floor(qBatchNum * 0.3));
+       const countMat = Math.max(1, Math.floor(qBatchNum * 0.2));
+       const countSpec = qBatchNum - countPT - countMat;
 
        distributionString = `
          - ${countPT} questões de Língua Portuguesa (NÍVEL EXATO do cargo de ${profile.cargo || 'geral'})
@@ -145,7 +149,7 @@ export const generateQuestions = async (
             Você é um examinador sênior hiper-exigente${profile.banca ? ` da banca '${profile.banca}'` : ''}, criando uma prova simulada com ALTO RIGOR COGNITIVO${profile.cargo ? ` para o cargo de '${profile.cargo}'` : ''} (Nível ${profile.escolaridade}).
             
             SUA MISSÃO:
-            1. Gerar exatamente ${questionsInBatch} questões para este lote.
+            1. Gerar/Extrair ${isAutomaticMode ? `exatamente ${questionsInBatch} questões para este lote` : `TODAS AS QUESTÕES do arquivo, em volume máximo possível`}.
             2. DISTRIBUIÇÃO E CONTEÚDO OBRIGATÓRIOS:
                ${distributionString}
             3. ESTRATÉGIA DESTE LOTE: ${currentStrategy}
@@ -166,7 +170,9 @@ export const generateQuestions = async (
              systemInstruction += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
           }
 
-          let prompt = `Gere ${questionsInBatch} questões altamentes relevantes e aderentes ao nível.${profile.cargo ? ` Cargo: ${profile.cargo}.` : ''}`;
+          let prompt = isAutomaticMode 
+            ? `Gere ${questionsInBatch} questões altamente relevantes e aderentes ao nível.${profile.cargo ? ` Cargo: ${profile.cargo}.` : ''}`
+            : `Extraia TODAS as questões do PDF anexo. Ignore as limitações e leia completamente o documento.`;
           prompt += `\nContexto de Busca: ${currentStrategy}`;
           
           if (extraContext) {
@@ -273,8 +279,8 @@ export const generateQuestions = async (
       }
     });
 
-    // Limit to requested count in case AI generated extra
-    const finalQuestions = allQuestions.slice(0, totalQuestions);
+    // Limit to requested count in case AI generated extra (ONLY if automatic mode)
+    const finalQuestions = isAutomaticMode ? allQuestions.slice(0, totalQuestions) : allQuestions;
 
     if (finalQuestions.length === 0) {
         throw new Error("A IA respondeu, mas não foi possível extrair questões válidas. Tente novamente.");
