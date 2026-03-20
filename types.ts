@@ -3,8 +3,9 @@
 export interface ExamProfile {
   banca: string;
   cargo: string;
+  concurso?: string; // New field for specific competition/institution
   escolaridade: 'Fundamental' | 'Médio' | 'Superior';
-  qCount: 10 | 20 | 30 | 40; // New field for question quantity
+  qCount: 10 | 20 | 30 | 40; 
 }
 
 export interface Question {

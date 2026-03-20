@@ -154,7 +154,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ answers, questions, analysis,
       {/* --- SECTION 1: SESSION SUMMARY (Immediate Feedback) --- */}
       <div className="text-center mb-6 relative">
         <h2 className="text-3xl font-extrabold text-gray-800 dark:text-white tracking-tight">Resultado do Simulado</h2>
-        <p className="text-gray-500 font-medium">{profile.cargo} • {profile.banca}</p>
+        <p className="text-gray-500 font-medium">
+          {profile.concurso ? `${profile.concurso} • ` : ''}{profile.cargo} • {profile.banca}
+        </p>
         
         {/* PDF Export Button */}
         <button 

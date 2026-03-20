@@ -79,6 +79,22 @@ const cleanAndParseJSON = (text: string): any => {
   }
 };
 
+// Helper to manage seen questions in localStorage to avoid duplicates
+const getSeenQuestionKeys = (): string[] => {
+  try {
+    const seen = localStorage.getItem('cogniquest_seen_questions');
+    return seen ? JSON.parse(seen) : [];
+  } catch { return []; }
+};
+
+const saveSeenQuestionKeys = (newQuestions: Question[]) => {
+  const seen = getSeenQuestionKeys();
+  // Keep only a hash or first 30 chars of the question text to save space
+  const currentKeys = newQuestions.map(q => q.text.substring(0, 50).trim());
+  const updated = [...new Set([...seen, ...currentKeys])].slice(-200); // Keep last 200
+  localStorage.setItem('cogniquest_seen_questions', JSON.stringify(updated));
+};
+
 export const generateQuestions = async (
   profile: ExamProfile, 
   files: UploadedFile[], 
@@ -90,29 +106,32 @@ export const generateQuestions = async (
     throw new Error("Chave de API não encontrada. Verifique seu arquivo .env ou a configuração do projeto.");
   }
 
-  // Use a stable model. Instructions suggest avoiding gemini-1.5-flash, using gemini-3-flash-preview.
   const model = "gemini-3-flash-preview";
   const isAutomaticMode = files.length === 0;
-
-  // Use the selected count from profile, default to 10 if missing
   const totalQuestions = profile.qCount || 10;
   
-  // Se for automático, dividimos em batches de 10. Se enviar PDF, faz 1 batch único.
+  // Para modo automático, fazemos em batches para maior variedade. 
+  // Para PDF, um batch maior para extrair tudo.
   const batchSize = isAutomaticMode ? 10 : 250; 
   const batches = isAutomaticMode ? Math.ceil(totalQuestions / batchSize) : 1;
   
-  // Strategy Definitions for Broader Search
+  const concursoContext = profile.concurso ? `para o concurso '${profile.concurso}'` : "";
+  
   const searchStrategies = [
-    "Foco em TENDÊNCIAS RECENTES (2023-2025) e provas aplicadas ultimamente.",
-    "Foco em CONCEITOS CLÁSSICOS, gramática normativa e fundamentos da matemática.",
-    "Foco em QUESTÕES DIFÍCEIS, pegadinhas comuns da banca e casos complexos.",
-    "Foco em LEGISLAÇÃO PURA (Lei Seca), atualizações de leis e jurisprudência."
+    `BUSCA POR EDITAL: Encontre o edital oficial ${concursoContext} e liste as matérias (Português, RLM, Informática, Específicas, etc.).`,
+    `TENDÊNCIAS DA BANCA: Pesquise como a banca ${profile.banca} cobrou o cargo ${profile.cargo} nos últimos 2 anos.`,
+    `QUESTÕES REAIS: Localize cadernos de prova reais do site PCI Concursos para ${profile.cargo} ${concursoContext}.`,
+    `LEGISLAÇÃO ESPECÍFICA: Verifique se o edital ${concursoContext} exige leis municipais, estaduais ou normas internas.`
   ];
+
+  const seenKeys = getSeenQuestionKeys();
+  const avoidList = seenKeys.length > 0 
+    ? `EVITE gerar questões com enunciados similares a estes (já apresentados ao usuário): \n- ${seenKeys.join('\n- ')}`
+    : "";
 
   const promises = [];
 
   for (let i = 0; i < batches; i++) {
-    // Determine questions for this specific batch (handles the last partial batch if any)
     const questionsInBatch = isAutomaticMode 
       ? ((i === batches - 1 && totalQuestions % batchSize !== 0) ? totalQuestions % batchSize : batchSize)
       : "TODAS";
@@ -120,155 +139,91 @@ export const generateQuestions = async (
     let distributionString = "";
     if (!isAutomaticMode) {
        distributionString = `
-         - EXTRAIA EXATAMENTE TODAS as questões que estiverem presentes nos arquivos anexos.
-         - IGNORE qualquer limite numérico programado na geração. Se o PDF tiver 5 questões, extraia 5. Se tiver 100, extraia 100.
-         - Se o PDF for um texto base/teoria sem questões prontas, crie TODAS as questões possíveis que cobrem de ponta a ponta o documento de forma minuciosa.
-         - NÃO INVENTE matérias ou assuntos genéricos que não constam no arquivo enviado.
+         - EXTRAIA EXATAMENTE TODAS as questões presentes nos arquivos.
+         - BUSQUE por padrões de numeração (1., 2., Q1, Questão 1), enunciados e alternativas (a, b, c, d, e).
+         - Mantenha a fidelidade absoluta ao texto original da prova.
+         - Se houver gabarito no final do PDF, use-o. Caso contrário, resolva você mesmo com 100% de precisão.
        `;
     } else {
        const qBatchNum = questionsInBatch as number;
-       const countPT = Math.max(1, Math.floor(qBatchNum * 0.3));
-       const countMat = Math.max(1, Math.floor(qBatchNum * 0.2));
-       const countSpec = qBatchNum - countPT - countMat;
-
+       distributionString = `
+         - IDENTIFIQUE as matérias reais do edital ${concursoContext}.
+         - GERE as ${qBatchNum} questões distribuindo-as entre as matérias identificadas (ex: Português, Informática, RLM, Específicas).
+         - PRIORIZE o que é mais cobrado para o cargo ${profile.cargo}.
+       `;
+       
        if (extraContext) {
-           distributionString = `
-         - ATENÇÃO OBRIGATÓRIA: O usuário forneceu um pedido específico para os temas das questões.
-         - GERE TODAS AS QUESTÕES (${qBatchNum}) FOCADAS EXCLUSIVAMENTE NO PEDIDO DO USUÁRIO.
-         - NÃO CRIE questões de Português, Matemática ou Conhecimentos Específicos genéricos, a menos que o usuário tenha pedido expressamente.
-         - Mantenha o formato e a dificuldade exigidas para o cargo (${profile.cargo || 'geral'}).
-       `;
-       } else {
-           distributionString = `
-         - ${countPT} questões de Língua Portuguesa (NÍVEL EXATO do cargo de ${profile.cargo || 'geral'})
-         - ${countMat} questões de Matemática/Raciocínio Lógico (NÍVEL ADEQUADO: estritamente o nível real cobrado para o cargo, ABORTE criar questões matemáticas imbecis ou genéricas do tipo regra de 3 se o cargo exigir mais complexidade)
-         - ${countSpec} questões de Conhecimentos Específicos do Cargo/Legislação pertinente
-       `;
+           distributionString += `\n- FOCO ADICIONAL: "${extraContext}".`;
        }
     }
 
-    // Rotate strategies based on batch index to ensure variety across the whole exam
     const currentStrategy = searchStrategies[i % searchStrategies.length];
 
     promises.push(
       (async () => {
         try {
-          // Dynamic System Instruction with Explicit Distribution Rules AND Search Strategy
           let systemInstruction = `
-            Você é um examinador sênior e especializado na elaboração de provas de concursos públicos.
-            Você representa ESTRITAMENTE a banca organizadora: '${profile.banca || 'Banca Padrão de Concursos'}'.
-            Sua missão é criar uma avaliação REALISTA e de ALTO NÍVEL para o cargo de: '${profile.cargo || 'Diversos'}' (Escolaridade: ${profile.escolaridade}).
-            
-            DIRETRIZES INEGOCIÁVEIS:
-            1. ABORTE O PADRÃO GENÉRICO: Proibido criar questões bobas, óbvias ou curtas demais. Use textos de apoio documentais, situações-problema elaboradas ou jurisprudência (se aplicável ao cargo). As questões DEVEM se passar por questões reais de concursos anteriores da banca ${profile.banca || 'solicitada'}.
-            2. QUANTIDADE: Gerar/Extrair ${isAutomaticMode ? `exatamente ${questionsInBatch} questões para este lote` : `TODAS AS QUESTÕES do arquivo, em volume máximo possível`}.
-            3. DISTRIBUIÇÃO OBRIGATÓRIA:
-               ${distributionString}
-            4. ESTRATÉGIA DESTE LOTE: ${currentStrategy}
-            5. FORMATAÇÃO E ESTILO: Emule 100% o estilo da banca '${profile.banca || 'padrão'}'. Se ela usa pegadinhas específicas, use-as. Se usa textos longos, use-os. O rigor cognitivo deve ser EXATAMENTE o do cargo de '${profile.cargo || 'nível '+profile.escolaridade}'.
+            Você é um ESPECIALISTA em concursos públicos brasileiros. 
+            Sua missão é atuar como a banca organizadora: '${profile.banca || 'Banca de Excelência'}'.
+            Cargo: '${profile.cargo || 'Diversos'}' (Escolaridade: ${profile.escolaridade}).
+            ${profile.concurso ? `Foco no Concurso: '${profile.concurso}'` : ""}
 
+            DIRETRIZES DE ALTA PERFORMANCE:
+            1. PESQUISA DE EDITAL: Use o 'googleSearch' para encontrar o edital ou provas REAIS ${concursoContext}. 
+            2. MATÉRIAS REAIS: Não invente matérias. Descubra se cai Informática, RLM, Matemática, etc., para este cargo específico.
+            3. REALISMO: As questões DEVEM ser idênticas ou seguir EXATAMENTE o rigor e estilo da banca ${profile.banca}.
+            4. NÃO REPETIÇÃO: ${avoidList}
+            5. ESTRATÉGIA DO BATCH: ${currentStrategy}
+            6. DISTRIBUIÇÃO: ${distributionString}
+            
+            FORMATO: Retorne um ARRAY de objetos JSON seguindo o schema fornecido.
           `;
 
           if (files.length > 0) {
-             systemInstruction += `\n5. REGRA DE OURO SOBRE ARQUIVOS PDF: 
-             - MATERIAL FORNECIDO! Seus dados devem vir DO ARQUIVO.
-             - Se for uma prova anterior, copie e EXTRAIA as questões exatamente de lá, formatando-as em JSON.
-             - Se for apostila de estudo, faça questões focadas e limitadas EXCLUSIVAMENTE ao conteúdo ali demonstrado. NUNCA gere perguntas de temas alheios ao conteúdo.`;
-          } else if (isAutomaticMode) {
-            systemInstruction += `\n5. MODO AUTOMÁTICO DE BUSCA: Use o 'googleSearch' agressivamente para validar matérias, encontrar o edital real do cargo e provas passadas recentes.`;
-          }
-
-          if (extraContext) {
-             systemInstruction += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
+             systemInstruction += `\n\nREGRA PARA PDF: Você deve ser um extrator fiel. Se o arquivo for uma prova, ignore sua criatividade e extraia as questões como elas são. Se for material de estudo (apostila), crie questões inéditas baseadas APENAS no texto do arquivo.`;
           }
 
           let prompt = isAutomaticMode 
-            ? `Crie ${questionsInBatch} questões inéditas ou adaptadas, idênticas às aplicadas em provas reais da banca ${profile.banca || 'organizadora'} para o cargo de ${profile.cargo || 'concurso geral'} (${profile.escolaridade}). NÃO gere questões óbvias.`
-            : `Extraia TODAS as questões do PDF anexo. Ignore as limitações e leia completamente o documento.`;
-          prompt += `\nContexto de Busca/Enfoque: ${currentStrategy}`;
+            ? `Pesquise o edital e provas de ${profile.cargo} ${concursoContext} da banca ${profile.banca}. Gere ${questionsInBatch} questões reais das matérias do concurso (ex: PT, Informática, RLM, Específicas).`
+            : `Extraia TODAS as questões do PDF anexo de forma minuciosa.`;
           
-          if (extraContext) {
-            prompt += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este pedido acima de qualquer outra regra genérica.`;
-          }
+          if (extraContext) prompt += `\nConsidere também este contexto: ${extraContext}`;
 
           const parts: any[] = [{ text: prompt }];
           files.forEach(file => {
-             // Basic safety check: don't send gigantic files if user managed to bypass frontend checks
              if (file.data.length < 10 * 1024 * 1024) { 
                  parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
              }
           });
 
-          // Attempt 1: Try with googleSearch if needed
-          let response;
-          try {
-             response = await getAiInstance().models.generateContent({
-              model: model,
-              contents: { parts },
-              config: {
-                systemInstruction: systemInstruction,
-                responseMimeType: "application/json",
-                responseSchema: questionSchema,
-                // Use search if automatic mode to get internet data. 
-                // Even with files, we might want search if the user asks for "internet" variety, but usually files take precedence.
-                // Assuming "Automatic Mode" means no user files provided.
-                tools: isAutomaticMode ? [{ googleSearch: {} }] : [], 
-                thinkingConfig: { thinkingBudget: 1024 },
-              },
-            });
-          } catch (apiError: any) {
-            console.warn(`Batch ${i} primary attempt failed:`, apiError);
-            throw apiError; 
-          }
+          const response = await getAiInstance().models.generateContent({
+            model: model,
+            contents: { parts },
+            config: {
+              systemInstruction: systemInstruction,
+              responseMimeType: "application/json",
+              responseSchema: questionSchema,
+              tools: isAutomaticMode ? [{ googleSearch: {} }] : [], // Sempre buscar se for automático
+              thinkingConfig: { thinkingBudget: 1024 },
+            },
+          });
 
           if (!response.text) throw new Error("Empty response from AI");
           return response;
 
-        } catch (searchError: any) {
-          console.warn(`Batch ${i} failed. Retrying fallback without tools...`, searchError);
-          
-          // Fallback Strategy: No Search, Standard Prompt
-          try {
-            let fallbackInstruction = `
-              Você é um examinador hiper-rigoroso${profile.banca ? ` da banca ${profile.banca}` : ''}.
-              Crie uma prova${profile.cargo ? ` para ${profile.cargo}` : ''} (Nível: ${profile.escolaridade}).
-              Gere EXATAMENTE:
-              ${distributionString}
-              Retorne APENAS JSON válido, focado de forma estrita no nível de dificuldade exigido.
-            `;
-            
-            if (extraContext) {
-               fallbackInstruction += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
-            }
-
-            let fallbackPrompt = `Gere ${questionsInBatch} questões diversificadas${profile.cargo ? ` para ${profile.cargo}` : ''}.`;
-            if (extraContext) {
-               fallbackPrompt += `\n\nATENÇÃO MÁXIMA AO PEDIDO DO USUÁRIO: "${extraContext}". Você DEVE priorizar este tema/foco acima de qualquer outra regra de distribuição.`;
-            }
-
-             const fallbackParts: any[] = [{ text: fallbackPrompt }];
-             files.forEach(file => {
-                 if (file.data.length < 10 * 1024 * 1024) { 
-                    fallbackParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
-                 }
-             });
-
-            const fallbackResponse = await getAiInstance().models.generateContent({
-              model: model, 
-              contents: { parts: fallbackParts },
-              config: {
-                systemInstruction: fallbackInstruction,
-                responseMimeType: "application/json",
-                responseSchema: questionSchema,
-                tools: [], // No tools
-                thinkingConfig: { thinkingBudget: 512 }, 
-              },
-            });
-            return fallbackResponse;
-          } catch (e: any) {
-            console.error("Fallback failed", e);
-            throw new Error(`Falha crítica na API (Fallback): ${e.message || e}`);
-          }
+        } catch (error: any) {
+          console.warn(`Batch ${i} failed. Error:`, error);
+          // Fallback robusto sem ferramentas de busca se a busca falhar
+          const fallbackInstruction = `Gere ${questionsInBatch} questões simuladas de ${profile.banca || 'concurso'} para ${profile.cargo || 'nível ' + profile.escolaridade}. Retorne JSON.`;
+          const fallbackResponse = await getAiInstance().models.generateContent({
+            model: model, 
+            contents: { parts: [{ text: fallbackInstruction }] },
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: questionSchema,
+            },
+          });
+          return fallbackResponse;
         }
       })()
     );
@@ -291,24 +246,11 @@ export const generateQuestions = async (
       }
     });
 
-    // Limit to requested count in case AI generated extra (ONLY if automatic mode)
-    const finalQuestions = isAutomaticMode ? allQuestions.slice(0, totalQuestions) : allQuestions;
-
-    if (finalQuestions.length === 0) {
-        throw new Error("A IA respondeu, mas não foi possível extrair questões válidas. Tente novamente.");
-    }
-
-    return finalQuestions.map((q: any, index: number) => {
+    const finalQuestions = (isAutomaticMode ? allQuestions.slice(0, totalQuestions) : allQuestions).map((q: any, index: number) => {
       let parsedIndex = Number(q.correctIndex);
-      if (isNaN(parsedIndex) && typeof q.correctIndex === 'string') {
-         const letterMatch = q.correctIndex.toUpperCase().match(/[A-E]/);
-         if (letterMatch) {
-            parsedIndex = letterMatch[0].charCodeAt(0) - 65; // A=0, B=1, etc.
-         } else {
-            parsedIndex = 0; // fallback
-         }
-      } else if (isNaN(parsedIndex)) {
-          parsedIndex = 0;
+      if (isNaN(parsedIndex)) {
+          const letterMatch = String(q.correctIndex).toUpperCase().match(/[A-E]/);
+          parsedIndex = letterMatch ? letterMatch[0].charCodeAt(0) - 65 : 0;
       }
       return {
         ...q,
@@ -316,6 +258,13 @@ export const generateQuestions = async (
         id: `q-${Date.now()}-${index}`
       };
     });
+
+    if (finalQuestions.length === 0) {
+        throw new Error("A IA respondeu, mas não foi possível extrair questões válidas. Tente novamente.");
+    }
+
+    saveSeenQuestionKeys(finalQuestions);
+    return finalQuestions;
 
   } catch (error: any) {
     console.error("Error generating questions:", error);

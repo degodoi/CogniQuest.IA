@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UploadedFile, ExamProfile } from '../types';
 import { saveFile, getFiles, deleteFile } from '../services/storageService';
-import { UploadCloud, FileText, Trash2, Play, Building2, Briefcase, GraduationCap, ListOrdered } from 'lucide-react';
+import { UploadCloud, FileText, Trash2, Play, Building2, Briefcase, GraduationCap, ListOrdered, Star } from 'lucide-react';
 
 interface ExamCreationViewProps {
   onStart: (profile: ExamProfile, files: UploadedFile[], context: string) => void;
@@ -15,10 +15,16 @@ const MAX_FILE_SIZE_MB = 4;
 const ExamCreationView: React.FC<ExamCreationViewProps> = ({ onStart, onCancel, isLoading, onError }) => {
   const [banca, setBanca] = useState('');
   const [cargo, setCargo] = useState('');
+  const [concurso, setConcurso] = useState('');
   const [escolaridade, setEscolaridade] = useState<'Fundamental' | 'Médio' | 'Superior'>('Médio');
   const [qCount, setQCount] = useState<10 | 20 | 30 | 40>(10);
   const [storedFiles, setStoredFiles] = useState<UploadedFile[]>([]);
   const [context, setContext] = useState('');
+
+  const subjectShortcuts = [
+    "Português", "Matemática", "Raciocínio Lógico", "Informática", 
+    "Direito Administrativo", "Direito Constitucional", "Conhecimentos Específicos"
+  ];
 
   useEffect(() => {
     loadPreferences();
@@ -32,6 +38,7 @@ const ExamCreationView: React.FC<ExamCreationViewProps> = ({ onStart, onCancel, 
         const parsed = JSON.parse(saved);
         if (parsed.banca) setBanca(parsed.banca);
         if (parsed.cargo) setCargo(parsed.cargo);
+        if (parsed.concurso) setConcurso(parsed.concurso);
         if (parsed.escolaridade) setEscolaridade(parsed.escolaridade);
         if (parsed.qCount) setQCount(parsed.qCount);
       } catch (e) {
@@ -41,7 +48,7 @@ const ExamCreationView: React.FC<ExamCreationViewProps> = ({ onStart, onCancel, 
   };
 
   const savePreferences = () => {
-    const profile = { banca, cargo, escolaridade, qCount };
+    const profile = { banca, cargo, concurso, escolaridade, qCount };
     localStorage.setItem('lastExamProfile', JSON.stringify(profile));
   };
 
@@ -121,10 +128,19 @@ const ExamCreationView: React.FC<ExamCreationViewProps> = ({ onStart, onCancel, 
     loadFiles();
   };
 
+  const toggleSubjectShortcut = (subject: string) => {
+    const currentContextArray = context.split(',').map(s => s.trim()).filter(Boolean);
+    if (currentContextArray.includes(subject)) {
+      setContext(currentContextArray.filter(s => s !== subject).join(', '));
+    } else {
+      setContext(prev => prev ? `${prev}, ${subject}` : subject);
+    }
+  };
+
   const handleStartWrapper = () => {
     savePreferences(); 
     updateStreakOnStart();
-    const profile: ExamProfile = { banca, cargo, escolaridade, qCount };
+    const profile: ExamProfile = { banca, cargo, concurso, escolaridade, qCount }; // Include concurso in profile
     onStart(profile, storedFiles, context);
   };
 
@@ -142,6 +158,19 @@ const ExamCreationView: React.FC<ExamCreationViewProps> = ({ onStart, onCancel, 
           Voltar
         </button>
       </div>
+
+      <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 p-4 rounded-2xl mb-6 flex items-start space-x-3">
+        <div className="bg-indigo-600 p-1.5 rounded-lg text-white">
+          <Star className="w-4 h-4" fill="currentColor" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200">Geração Inteligente Ativa</p>
+          <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80">
+            O sistema agora realiza uma <b>Busca Profunda</b> no site PCI Concursos e outros repositórios para trazer questões reais e recentes (2024-2026) da banca selecionada.
+          </p>
+        </div>
+      </div>
+
 
       <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 transition-colors relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
@@ -163,15 +192,30 @@ const ExamCreationView: React.FC<ExamCreationViewProps> = ({ onStart, onCancel, 
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center">
-                <Briefcase className="w-4 h-4 mr-1.5 text-indigo-500" /> Cargo Pretendido (Opcional)
+              <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-indigo-500" />
+                Cargo Pretendido
               </label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={cargo}
                 onChange={(e) => setCargo(e.target.value)}
-                placeholder="Ex: Policial, Técnico..."
-                className="w-full p-3.5 bg-gray-50 dark:bg-gray-700/50 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 dark:text-white transition-all font-medium border-gray-200 dark:border-gray-600"
+                placeholder="Ex: Escrevente, Policial, Analista..."
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all dark:text-white"
+              />
+            </div>
+
+            <div className="space-y-2 lg:col-span-2">
+              <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-indigo-500" />
+                Concurso / Órgão (Opcional - Afunila a busca)
+              </label>
+              <input
+                type="text"
+                value={concurso}
+                onChange={(e) => setConcurso(e.target.value)}
+                placeholder="Ex: TJ-SP, INSS, Prefeitura de Santos..."
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all dark:text-white"
               />
             </div>
 
@@ -265,15 +309,34 @@ const ExamCreationView: React.FC<ExamCreationViewProps> = ({ onStart, onCancel, 
             )}
           </div>
 
-          <div>
-             <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center mb-2">
-                Contexto Adicional (Opcional)
+          <div className="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-700">
+             <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <Star className="w-4 h-4 text-indigo-500" />
+                Focar em Matérias / Contexto Extra (Opcional)
              </label>
+             
+             <div className="flex flex-wrap gap-2">
+              {subjectShortcuts.map(subject => (
+                <button
+                  key={subject}
+                  type="button"
+                  onClick={() => toggleSubjectShortcut(subject)}
+                  className={`px-3 py-1.5 text-[10px] sm:text-xs font-bold rounded-full transition-all border uppercase tracking-wider ${
+                    context.includes(subject)
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400'
+                  }`}
+                >
+                  {subject}
+                </button>
+              ))}
+            </div>
+
              <textarea
               value={context}
               onChange={(e) => setContext(e.target.value)}
-              placeholder="Dica opcional para a IA: Ex: 'Quero focar em Direito Constitucional' ou 'Gere perguntas difíceis'..."
-              className="w-full p-4 text-sm border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-24 placeholder-gray-400 transition-colors"
+              placeholder="Ex: Focar em Redação, focar em Direito Penal, usar nível de dificuldade alto..."
+              className="w-full p-4 text-sm border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-24 placeholder-gray-400 transition-all shadow-inner"
             />
           </div>
 

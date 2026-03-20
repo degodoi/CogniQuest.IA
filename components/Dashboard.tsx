@@ -389,7 +389,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateExam, onStartReview, onVi
                     </span>
                   </div>
                   <p className="text-sm font-bold text-gray-800 dark:text-white truncate">
-                    {item.profile ? item.profile.cargo : 'Simulado Geral'}
+                    {item.profile ? `${item.profile.concurso ? item.profile.concurso + ' - ' : ''}${item.profile.cargo}` : 'Simulado Geral'}
                   </p>
                   <p className="text-xs text-gray-500 truncate mt-0.5">
                     {item.profile ? item.profile.banca : ''} • {item.totalQuestions} questões
